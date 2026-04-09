@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DPA → Redgate Monitor Converter</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg2: #f7f7f5;
+    --bg3: #f0f0ee;
+    --text: #111111;
+    --text2: #555555;
+    --text3: #888888;
+    --border: rgba(0,0,0,0.13);
+    --border2: rgba(0,0,0,0.22);
+    --blue-bg: #e6f1fb;
+    --blue-border: #b5d4f4;
+    --blue-text: #185fa5;
+    --blue-mid: #378add;
+    --amber-bg: #faeeda;
+    --amber-border: #fac775;
+    --amber-text: #854f0b;
+    --green-bg: #eaf3de;
+    --green-border: #c0dd97;
+    --green-text: #3b6d11;
+    --purple-bg: #eeedfe;
+    --purple-border: #cecbf6;
+    --purple-text: #534ab7;
+    --red-bg: #fcebeb;
+    --red-border: #f09595;
+    --red-text: #a32d2d;
+    --radius: 8px;
+    --radius-lg: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1a1a18;
+      --bg2: #242422;
+      --bg3: #2e2e2b;
+      --text: #f0ede8;
+      --text2: #aaa89f;
+      --text3: #6b6963;
+      --border: rgba(255,255,255,0.1);
+      --border2: rgba(255,255,255,0.18);
+      --blue-bg: #0c2a45;
+      --blue-border: #185fa5;
+      --blue-text: #85b7eb;
+      --blue-mid: #378add;
+      --amber-bg: #2e1f06;
+      --amber-border: #854f0b;
+      --amber-text: #fac775;
+      --green-bg: #172404;
+      --green-border: #3b6d11;
+      --green-text: #c0dd97;
+      --purple-bg: #1a1836;
+      --purple-border: #534ab7;
+      --purple-text: #cecbf6;
+      --red-bg: #2d1010;
+      --red-border: #a32d2d;
+      --red-text: #f7c1c1;
+    }
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 14px;
+    color: var(--text);
+    background: var(--bg2);
+    min-height: 100vh;
+  }
+  /* ── Top nav ── */
+  nav {
+    background: var(--bg);
+    border-bottom: 0.5px solid var(--border);
+    padding: 0 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 52px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .nav-logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--text);
+    text-decoration: none;
+  }
+  .nav-logo svg { flex-shrink: 0; }
+  .nav-badge {
+    font-size: 10px;
+    background: var(--blue-bg);
+    color: var(--blue-text);
+    border: 0.5px solid var(--blue-border);
+    border-radius: 5px;
+    padding: 2px 7px;
+    font-weight: 500;
+  }
+  nav a.gh-link {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text2);
+    text-decoration: none;
+    padding: 5px 10px;
+    border: 0.5px solid var(--border2);
+    border-radius: var(--radius);
+  }
+  nav a.gh-link:hover { background: var(--bg2); }
+
+  /* ── Layout ── */
+  .page { max-width: 900px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+  .hero { margin-bottom: 2rem; }
+  .hero h1 { font-size: 24px; font-weight: 600; margin-bottom: 6px; }
+  .hero p { font-size: 14px; color: var(--text2); line-height: 1.6; max-width: 600px; }
+
+  /* ── Stepper ── */
+  .stepper {
+    display: flex;
+    gap: 0;
+    margin-bottom: 1.5rem;
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    background: var(--bg);
+  }
+  .step-btn {
+    flex: 1;
+    padding: 10px 8px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text2);
+    background: transparent;
+    border: none;
+    border-right: 0.5px solid var(--border);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    transition: background .12s;
+  }
+  .step-btn:last-child { border-right: none; }
+  .step-btn:hover { background: var(--bg2); }
+  .step-btn.active {
+    background: var(--blue-bg);
+    color: var(--blue-text);
+  }
+  .step-num-circle {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px;
+    background: var(--bg3);
+    color: var(--text2);
+  }
+  .step-btn.active .step-num-circle {
+    background: var(--blue-mid);
+    color: #fff;
+  }
+  .step-btn.done .step-num-circle {
+    background: var(--green-text);
+    color: #fff;
+  }
+  .step-btn.done { color: var(--green-text); }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--bg);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+  }
+  .section-title { font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+
+  /* ── Form elements ── */
+  label { font-size: 12px; color: var(--text2); display: block; margin-bottom: 4px; font-weight: 500; }
+  input[type=text], select, textarea {
+    width: 100%; font-size: 13px; padding: 8px 10px;
+    border: 0.5px solid var(--border2);
+    border-radius: var(--radius);
+    background: var(--bg2);
+    color: var(--text);
+    margin-bottom: 12px;
+    font-family: inherit;
+  }
+  input[type=text]:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: var(--blue-mid);
+    box-shadow: 0 0 0 2px var(--blue-bg);
+  }
+  textarea { resize: vertical; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
+
+  /* ── Buttons ── */
+  .btn {
+    font-size: 13px; padding: 8px 16px;
+    border: 0.5px solid var(--border2);
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+    font-family: inherit;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn:hover { background: var(--bg2); }
+  .btn-primary {
+    background: var(--blue-bg);
+    border-color: var(--blue-border);
+    color: var(--blue-text);
+    font-weight: 500;
+  }
+  .btn-primary:hover { filter: brightness(0.95); }
+  .btn-sm { font-size: 12px; padding: 5px 12px; }
+  .btn-group { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1rem; }
+
+  /* ── Drop zone ── */
+  .drop-zone {
+    border: 1.5px dashed var(--border2);
+    border-radius: var(--radius-lg);
+    padding: 2.5rem 1rem;
+    text-align: center;
+    cursor: pointer;
+    color: var(--text2);
+    font-size: 13px;
+    margin-bottom: 12px;
+    transition: background .15s, border-color .15s;
+    line-height: 1.8;
+  }
+  .drop-zone:hover, .drop-zone.over {
+    background: var(--blue-bg);
+    border-color: var(--blue-mid);
+    color: var(--blue-text);
+  }
+  .drop-zone svg { display: block; margin: 0 auto 8px; opacity: .5; }
+
+  /* ── Stats bar ── */
+  .stats-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 1.25rem; }
+  .stat-card { background: var(--bg2); border-radius: var(--radius); padding: 10px 14px; text-align: center; }
+  .stat-n { font-size: 24px; font-weight: 600; }
+  .stat-l { font-size: 11px; color: var(--text2); margin-top: 2px; }
+
+  /* ── Alert list ── */
+  .alert-item { padding: 10px 0; border-bottom: 0.5px solid var(--border); }
+  .alert-item:last-child { border-bottom: none; }
+  .alert-top { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: start; }
+  .alert-name { font-weight: 500; font-size: 13px; }
+  .alert-meta { font-size: 11px; color: var(--text2); margin-top: 2px; }
+  .alert-mapping { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 6px; padding-left: 30px; }
+  .mapping-tag {
+    font-size: 11px; padding: 2px 8px; border-radius: 5px;
+    background: var(--bg2); border: 0.5px solid var(--border);
+    color: var(--text2);
+  }
+
+  /* ── Badges ── */
+  .badge { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 5px; font-weight: 500; white-space: nowrap; }
+  .badge-high   { background: var(--red-bg);    color: var(--red-text);    border: 0.5px solid var(--red-border); }
+  .badge-med    { background: var(--amber-bg);  color: var(--amber-text);  border: 0.5px solid var(--amber-border); }
+  .badge-low    { background: var(--green-bg);  color: var(--green-text);  border: 0.5px solid var(--green-border); }
+  .badge-direct { background: var(--green-bg);  color: var(--green-text);  border: 0.5px solid var(--green-border); }
+  .badge-partial{ background: var(--amber-bg);  color: var(--amber-text);  border: 0.5px solid var(--amber-border); }
+  .badge-custom { background: var(--purple-bg); color: var(--purple-text); border: 0.5px solid var(--purple-border); }
+
+  /* ── Mapping grid ── */
+  .map-row { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: center; margin-bottom: 8px; font-size: 12px; }
+  .map-arrow { color: var(--text3); }
+
+  /* ── Output tabs + block ── */
+  .output-tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+  .output-tab {
+    font-size: 12px; padding: 5px 14px;
+    border: 0.5px solid var(--border2); border-radius: var(--radius);
+    background: transparent; color: var(--text2); cursor: pointer;
+    font-family: inherit;
+  }
+  .output-tab.active { background: var(--blue-bg); border-color: var(--blue-border); color: var(--blue-text); }
+  .output-block {
+    background: var(--bg2); border: 0.5px solid var(--border);
+    border-radius: var(--radius); padding: 14px;
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    font-size: 11px; white-space: pre; overflow: auto;
+    max-height: 380px; color: var(--text); line-height: 1.6;
+  }
+
+  /* ── Info / warn boxes ── */
+  .info-box {
+    background: var(--blue-bg); border: 0.5px solid var(--blue-border);
+    border-radius: var(--radius); padding: 10px 14px;
+    font-size: 12px; color: var(--blue-text); margin-bottom: 12px; line-height: 1.6;
+  }
+  .warn-box {
+    background: var(--amber-bg); border: 0.5px solid var(--amber-border);
+    border-radius: var(--radius); padding: 10px 14px;
+    font-size: 12px; color: var(--amber-text); margin-bottom: 12px; line-height: 1.6;
+  }
+  .note-pill { font-size: 10px; padding: 2px 7px; border-radius: 5px; background: var(--red-bg); color: var(--red-text); border: 0.5px solid var(--red-border); }
+
+  /* ── How-to footer card ── */
+  .howto { background: var(--bg2); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 14px; margin-top: 1rem; }
+  .howto p { font-size: 12px; color: var(--text2); line-height: 1.8; }
+  .howto strong { color: var(--text); }
+  .howto code { font-family: monospace; font-size: 11px; background: var(--bg3); padding: 1px 5px; border-radius: 4px; }
+
+  /* ── Footer ── */
+  footer {
+    text-align: center;
+    font-size: 11px;
+    color: var(--text3);
+    padding: 2rem 0 1rem;
+    border-top: 0.5px solid var(--border);
+    margin-top: 2rem;
+  }
+  .hidden { display: none !important; }
+  @media (max-width: 600px) {
+    .stats-grid { grid-template-columns: repeat(2,1fr); }
+    .stepper { flex-direction: column; border-radius: var(--radius); }
+    .step-btn { flex-direction: row; border-right: none; border-bottom: 0.5px solid var(--border); }
+    .step-btn:last-child { border-bottom: none; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-logo" href="#">
+    <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+      <rect width="22" height="22" rx="6" fill="#185fa5"/>
+      <path d="M5 16l4-8 4 5 2-3 2 6" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    </svg>
+    DPA → Redgate Monitor
+  </a>
+  <span class="nav-badge">v1.0</span>
+  <a class="gh-link" href="https://github.com" target="_blank">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+    View on GitHub
+  </a>
+</nav>
+
+<div class="page">
+  <div class="hero">
+    <h1>SolarWinds DPA → Redgate Monitor</h1>
+    <p>Convert DPA alert exports into Redgate Monitor–ready PowerShell scripts, webhook JSON, or SQL — with full alert type mapping applied automatically.</p>
+  </div>
+
+  <!-- Stepper -->
+  <div class="stepper">
+    <button class="step-btn active" id="sBtn0" onclick="switchTab(0)">
+      <span class="step-num-circle">1</span>Import
+    </button>
+    <button class="step-btn" id="sBtn1" onclick="switchTab(1)">
+      <span class="step-num-circle">2</span>Map fields
+    </button>
+    <button class="step-btn" id="sBtn2" onclick="switchTab(2)">
+      <span class="step-num-circle">3</span>Preview
+    </button>
+    <button class="step-btn" id="sBtn3" onclick="switchTab(3)">
+      <span class="step-num-circle">4</span>Export
+    </button>
+  </div>
+
+  <!-- ── TAB 0: IMPORT ── -->
+  <div id="tab0">
+    <div class="card">
+      <div class="section-title">Import DPA alert export</div>
+      <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileIn').click()">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+        Drop a DPA CSV export here, or click to browse
+        <br><span style="font-size:11px;opacity:.7">Supports .csv and .txt</span>
+        <input type="file" id="fileIn" accept=".csv,.txt" style="display:none" onchange="handleFile(event)">
+      </div>
+      <label>Or paste CSV data directly (header row required):</label>
+      <textarea id="rawPaste" rows="7" placeholder="AlertName,Severity,DatabaseInstance,StartTime,AlertType,Message,Threshold,CurrentValue&#10;High CPU Wait,High,PROD-SQL-01,2026-04-01 08:12:00,Resources,CPU wait exceeded threshold,80,94,Ended..."></textarea>
+      <div class="btn-group">
+        <button class="btn btn-primary" onclick="parseCSV()">Parse CSV →</button>
+        <button class="btn" onclick="loadSample()">Load sample data</button>
+        <button class="btn btn-sm" onclick="document.getElementById('rawPaste').value='';alerts=[]">Clear</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="section-title">What DPA export formats are supported?</div>
+      <p style="font-size:12px;color:var(--text2);line-height:1.8">
+        Export your active alerts from DPA's <strong>Alerts &gt; Manage Alerts</strong> view as CSV,
+        or query the DPA repository database and export via SSMS. The tool expects a header row
+        with any of: <code>AlertName</code>, <code>Severity</code>, <code>DatabaseInstance</code>,
+        <code>StartTime</code>, <code>AlertType</code>, <code>Message</code>, <code>Threshold</code>,
+        <code>CurrentValue</code>, <code>Status</code>. Column names are matched flexibly — you can
+        remap anything that doesn't auto-detect in the next step.
+      </p>
+    </div>
+  </div>
+
+  <!-- ── TAB 1: MAP ── -->
+  <div id="tab1" class="hidden">
+    <div class="card">
+      <div class="section-title">Column mapping</div>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:14px">DPA column → Redgate Monitor field. Auto-matched where column names align — override any below.</p>
+      <div id="mappingUI"></div>
+    </div>
+    <div class="card">
+      <div class="section-title">Redgate Monitor connection</div>
+      <label>Server URL</label>
+      <input type="text" id="rgUrl" value="http://my-redgate-monitor:8080" placeholder="http://your-server:8080">
+      <label>Auth token (from Configuration → PowerShell API)</label>
+      <input type="text" id="rgToken" placeholder="Paste your Redgate Monitor auth token">
+      <label>Default SQL instance name (as registered in Redgate Monitor)</label>
+      <input type="text" id="rgInstance" placeholder="e.g. PROD-SQL-01 or PROD-SQL-01\MSSQLSERVER">
+    </div>
+    <button class="btn btn-primary" onclick="buildPreview()">Build preview →</button>
+  </div>
+
+  <!-- ── TAB 2: PREVIEW ── -->
+  <div id="tab2" class="hidden">
+    <div class="stats-grid" id="statsBar"></div>
+    <div class="card" id="alertListCard">
+      <div class="section-title">Mapped alerts</div>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:12px">Each DPA alert type has been matched to its Redgate Monitor equivalent. Uncheck any alerts to exclude from the export.</p>
+      <div id="alertList"></div>
+    </div>
+    <button class="btn btn-primary" onclick="switchTab(3);buildOutputs()">Generate outputs →</button>
+  </div>
+
+  <!-- ── TAB 3: EXPORT ── -->
+  <div id="tab3" class="hidden">
+    <div class="card">
+      <div class="section-title">Output format</div>
+      <div class="output-tabs">
+        <button class="output-tab active" id="oTabPs"   onclick="showOutput('ps')">PowerShell script</button>
+        <button class="output-tab"        id="oTabJson" onclick="showOutput('json')">Webhook JSON</button>
+        <button class="output-tab"        id="oTabSql"  onclick="showOutput('sql')">Annotation SQL</button>
+      </div>
+      <div class="warn-box" id="outputNote"></div>
+      <div class="output-block" id="outputBlock"></div>
+      <div class="btn-group" style="margin-top:10px">
+        <button class="btn btn-primary" onclick="copyOutput()">Copy to clipboard</button>
+        <button class="btn" onclick="downloadOutput()">Download file</button>
+      </div>
+    </div>
+    <div class="howto">
+      <p style="font-weight:600;font-size:13px;margin-bottom:8px">How to run the PowerShell script</p>
+      <p>
+        1. In your Redgate Monitor portal go to <strong>Configuration → PowerShell API</strong> and download the module + generate an auth token.<br>
+        2. Place <code>RedgateSQM.psm1</code> in the same folder as the generated <code>.ps1</code>.<br>
+        3. Run: <code>.\dpa_to_redgate.ps1</code> on any machine that can reach your Redgate Monitor server.<br>
+        4. Alerts appear as <strong>timeline annotations</strong> on each matched SQL instance.<br>
+        5. Alerts marked <strong>[CUSTOM METRIC REQUIRED]</strong> need a custom metric built first under <strong>Configuration → Custom metrics and alerts</strong>.
+      </p>
+    </div>
+  </div>
+
+  <footer>
+    DPA → Redgate Monitor Converter &nbsp;·&nbsp; Not affiliated with SolarWinds or Redgate &nbsp;·&nbsp;
+    <a href="https://documentation.red-gate.com/monitor14" target="_blank" style="color:inherit">Redgate Monitor docs</a> &nbsp;·&nbsp;
+    <a href="https://documentation.solarwinds.com/en/success_center/dpa" target="_blank" style="color:inherit">DPA docs</a>
+  </footer>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let alerts = [], colHeaders = [], mappings = {}, outputMode = 'ps';
+
+// ── Alert type mapping table ───────────────────────────────────────────────
+const TYPE_MAP = [
+  {keys:['wait time anomaly','anomaly','ml anomaly'],         rgType:'Dynamic alerts — Waits',             rgCat:'Wait Time',     match:'direct',  source:'Custom',                note:'ML-powered (Redgate Monitor v14+)'},
+  {keys:['sql statement wait','query wait','statement wait'], rgType:'Long running query',                  rgCat:'Wait Time',     match:'direct',  source:'Custom',                note:'Maps to elapsed time threshold'},
+  {keys:['wait type','wait time','database instance wait'],   rgType:'Waits (custom metric)',              rgCat:'Wait Time',     match:'custom',  source:'Custom',                note:'Build custom metric on sys.dm_os_wait_stats'},
+  {keys:['cpu','processor'],                                   rgType:'Processor (CPU) utilization',        rgCat:'Resources',     match:'direct',  source:'PerformanceDegradation',note:'Machine-level threshold alert'},
+  {keys:['memory','ram','buffer cache','page life'],           rgType:'OS memory available',                rgCat:'Resources',     match:'direct',  source:'PerformanceDegradation',note:'Machine-level memory threshold'},
+  {keys:['disk i/o','io utilization','disk io','read/write'], rgType:'Disk space / avg read-write time',  rgCat:'Resources',     match:'direct',  source:'PerformanceDegradation',note:'Disk Used % + I/O latency alerts'},
+  {keys:['network'],                                           rgType:'Network utilization',                rgCat:'Resources',     match:'direct',  source:'Custom',                note:'Disabled by default in Redgate Monitor v14'},
+  {keys:['throughput','query throughput'],                     rgType:'Dynamic alerts — Query throughput',  rgCat:'Resources',     match:'direct',  source:'Custom',                note:'ML-powered (Redgate Monitor v14+)'},
+  {keys:['buffer','cache hit','hit ratio'],                    rgType:'Custom metric',                      rgCat:'Resources',     match:'custom',  source:'Custom',                note:'T-SQL on sys.dm_os_buffer_descriptors'},
+  {keys:['unavailable','not accessible','down','offline','unreachable'],rgType:'SQL Server unavailable',   rgCat:'Administrative',match:'direct',  source:'Custom',                note:'Instance connectivity / service check'},
+  {keys:['blocking','blocked','blocker'],                      rgType:'Blocking processes',                 rgCat:'Administrative',match:'direct',  source:'Custom',                note:'Head-blocker wait time threshold'},
+  {keys:['deadlock'],                                          rgType:'Deadlock (Extended Events)',         rgCat:'Administrative',match:'direct',  source:'Custom',                note:'Event alert with deadlock graph'},
+  {keys:['backup'],                                            rgType:'Backup overdue',                     rgCat:'Administrative',match:'direct',  source:'Custom',                note:'Based on backup_finish_date vs interval'},
+  {keys:['job fail','agent job','job error','job'],            rgType:'Job failing',                        rgCat:'Administrative',match:'direct',  source:'Custom',                note:'dbo.sysjobhistory failure detection'},
+  {keys:['parameter change','config change','configuration'], rgType:'SQL Server log entry',               rgCat:'Administrative',match:'partial', source:'Custom',                note:'Supplement with Extended Events custom metric'},
+  {keys:['disk space','disk capacity','volume','drive'],       rgType:'Disk space',                         rgCat:'Administrative',match:'direct',  source:'Custom',                note:'Machine-level Disk Used % threshold'},
+  {keys:['availability group','ag failover','cluster fail','cluster','failover'],rgType:'AG / Cluster failover',rgCat:'Administrative',match:'direct',source:'Custom',             note:'Event alert for HA topology changes'},
+  {keys:['custom procedure','stored procedure','sproc'],       rgType:'Custom metric',                      rgCat:'Custom',        match:'partial', source:'Custom',                note:'Wrap proc numeric output in scalar SELECT'},
+  {keys:['custom sql','custom alert','boolean','numeric return'],rgType:'Custom metric + alert',            rgCat:'Custom',        match:'direct',  source:'Custom',                note:'T-SQL returning single numeric value'},
+];
+
+const RG_FIELDS = {
+  alertName:'Alert name', severity:'Severity',
+  instance:'Database instance', startTime:'Alert start time',
+  endTime:'Alert end time', alertType:'Alert category / type',
+  message:'Description / message', threshold:'Threshold value',
+  currentValue:'Current value', status:'Status'
+};
+
+function resolveRgType(alertType, alertName, message) {
+  const hay = [alertType, alertName, message].join(' ').toLowerCase();
+  for (const r of TYPE_MAP) {
+    if (r.keys.some(k => hay.includes(k))) return r;
+  }
+  return {rgType:'Annotation (unclassified)', rgCat:'Unknown', match:'partial', source:'Custom', note:'No direct match — logged as annotation'};
+}
+
+// ── Tab navigation ─────────────────────────────────────────────────────────
+function switchTab(n) {
+  [0,1,2,3].forEach(i => {
+    document.getElementById('tab'+i).classList.toggle('hidden', i!==n);
+    document.getElementById('sBtn'+i).classList.toggle('active', i===n);
+  });
+}
+
+// ── Drag & drop ────────────────────────────────────────────────────────────
+const dz = document.getElementById('dropZone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('over'); const f = e.dataTransfer.files[0]; if (f) readFile(f); });
+function handleFile(e) { readFile(e.target.files[0]); }
+function readFile(f) { const r = new FileReader(); r.onload = e => { document.getElementById('rawPaste').value = e.target.result; parseCSV(); }; r.readAsText(f); }
+
+// ── Sample data ────────────────────────────────────────────────────────────
+function loadSample() {
+  document.getElementById('rawPaste').value =
+`AlertName,Severity,DatabaseInstance,StartTime,EndTime,AlertType,Message,Threshold,CurrentValue,Status
+High CPU Wait,High,PROD-SQL-01,2026-04-01 08:12:00,2026-04-01 08:45:00,Resources,CPU wait time exceeded threshold,80,94,Ended
+Blocking Session Detected,High,PROD-SQL-01,2026-04-01 09:03:00,,Administrative,Blocking detected — session 57 blocked by 23,1,3,Active
+Slow Query Wait,Medium,PROD-SQL-02,2026-04-01 07:55:00,2026-04-01 08:10:00,Wait Time,SQL statement wait time exceeded threshold,5000,8240,Ended
+tempdb Contention,Medium,DEV-SQL-01,2026-03-31 22:10:00,2026-03-31 22:18:00,Wait Time,High wait time on tempdb contention,2000,4450,Ended
+Disk Space Low,High,PROD-SQL-01,2026-04-01 10:00:00,,Administrative,Disk C:\\ at 91% capacity,90,91,Active
+Job Failure,Low,PROD-SQL-02,2026-04-01 06:00:00,2026-04-01 06:01:00,Administrative,SQL Agent job NightlyBackup failed,1,0,Ended
+Memory Pressure,Medium,PROD-SQL-01,2026-04-01 11:30:00,,Resources,Available memory below threshold,512,210,Active
+Deadlock Detected,High,PROD-SQL-01,2026-04-01 12:05:00,2026-04-01 12:05:01,Administrative,Deadlock detected between sessions 44 and 67,1,1,Ended
+Backup Overdue,High,PROD-SQL-02,2026-04-01 13:00:00,,Administrative,Last backup older than 24 hours,24,36,Active
+Wait Time Anomaly,Medium,PROD-SQL-01,2026-04-01 14:00:00,2026-04-01 14:20:00,Wait Time,Wait time anomaly detected — ML baseline exceeded,0,3.8,Ended`;
+  parseCSV();
+}
+
+// ── CSV parsing ────────────────────────────────────────────────────────────
+function parseCSV() {
+  const raw = document.getElementById('rawPaste').value.trim();
+  if (!raw) { alert('No data to parse.'); return; }
+  const lines = raw.split('\n').filter(l => l.trim());
+  colHeaders = splitCSV(lines[0]);
+  alerts = lines.slice(1).map((l, i) => {
+    const vals = splitCSV(l), obj = {_id: i, _excluded: false};
+    colHeaders.forEach((h, j) => obj[h] = (vals[j] || '').trim());
+    return obj;
+  });
+  buildMappingUI();
+  switchTab(1);
+}
+
+function splitCSV(line) {
+  const res = []; let cur = '', inQ = false;
+  for (const c of line) {
+    if (c === '"') inQ = !inQ;
+    else if (c === ',' && !inQ) { res.push(cur.trim()); cur = ''; }
+    else cur += c;
+  }
+  res.push(cur.trim()); return res;
+}
+
+// ── Field mapping UI ───────────────────────────────────────────────────────
+function buildMappingUI() {
+  const autoMap = {
+    alertName:    find(colHeaders, ['alertname','alert_name','name','title']),
+    severity:     find(colHeaders, ['severity','level','priority']),
+    instance:     find(colHeaders, ['databaseinstance','instance','server','host','database_instance']),
+    startTime:    find(colHeaders, ['starttime','start_time','timestamp','datetime','time','occurred']),
+    endTime:      find(colHeaders, ['endtime','end_time','resolved']),
+    alertType:    find(colHeaders, ['alerttype','type','category','alert_type']),
+    message:      find(colHeaders, ['message','description','detail','msg']),
+    threshold:    find(colHeaders, ['threshold','limit']),
+    currentValue: find(colHeaders, ['currentvalue','value','current_value','actual']),
+    status:       find(colHeaders, ['status','state'])
+  };
+  mappings = {...autoMap};
+  let html = '';
+  for (const [rgF, label] of Object.entries(RG_FIELDS)) {
+    const opts = colHeaders.map(h => `<option value="${h}" ${autoMap[rgF]===h?'selected':''}>${h}</option>`).join('');
+    html += `<div class="map-row">
+      <span style="font-size:12px">${label}</span>
+      <span class="map-arrow">→</span>
+      <select onchange="mappings['${rgF}']=this.value" style="margin-bottom:0">
+        <option value="">(skip)</option>${opts}
+      </select>
+    </div>`;
+  }
+  document.getElementById('mappingUI').innerHTML = html;
+}
+
+function find(arr, keys) { return arr.find(h => keys.includes(h.toLowerCase().replace(/[\s_]/g,''))) || ''; }
+
+// ── Preview ────────────────────────────────────────────────────────────────
+function buildPreview() {
+  const mapped = getMapped();
+  const high = mapped.filter(a => a.severity.toLowerCase() === 'high').length;
+  const med  = mapped.filter(a => a.severity.toLowerCase() === 'medium').length;
+  const low  = mapped.filter(a => ['low','info'].includes(a.severity.toLowerCase())).length;
+
+  document.getElementById('statsBar').innerHTML = `
+    <div class="stat-card"><div class="stat-n">${mapped.length}</div><div class="stat-l">Total alerts</div></div>
+    <div class="stat-card"><div class="stat-n" style="color:var(--red-text)">${high}</div><div class="stat-l">High</div></div>
+    <div class="stat-card"><div class="stat-n" style="color:var(--amber-text)">${med}</div><div class="stat-l">Medium</div></div>
+    <div class="stat-card"><div class="stat-n" style="color:var(--green-text)">${low}</div><div class="stat-l">Low</div></div>`;
+
+  const rows = mapped.map(a => {
+    const r = resolveRgType(a.alertType, a.alertName, a.message);
+    const sev = a.severity.toLowerCase();
+    const sevClass = sev==='high'?'badge-high':sev==='medium'?'badge-med':'badge-low';
+    const mClass = r.match==='direct'?'badge-direct':r.match==='partial'?'badge-partial':'badge-custom';
+    const noteHtml = r.match!=='direct' ? `<span class="note-pill">${esc(r.note)}</span>` : '';
+    return `<div class="alert-item">
+      <div class="alert-top">
+        <input type="checkbox" checked style="margin-top:3px" onchange="alerts[${a._id}]._excluded=!this.checked">
+        <div>
+          <div class="alert-name">${esc(a.alertName||'(unnamed)')}</div>
+          <div class="alert-meta">${esc(a.instance||'—')} &middot; ${esc(a.startTime||'—')}</div>
+        </div>
+        <span class="badge ${sevClass}">${esc(a.severity||'—')}</span>
+      </div>
+      <div class="alert-mapping">
+        <span style="font-size:11px;color:var(--text2)">DPA: <strong>${esc(a.alertType||'—')}</strong></span>
+        <span style="color:var(--text3);font-size:11px">→</span>
+        <span class="mapping-tag">RG: ${esc(r.rgType)}</span>
+        <span class="badge ${mClass}">${r.match}</span>
+        ${noteHtml}
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('alertList').innerHTML = rows || '<p style="color:var(--text2);font-size:13px">No alerts parsed yet.</p>';
+  switchTab(2);
+}
+
+function getMapped() {
+  return alerts.map(a => {
+    const r = {_id: a._id, _excluded: a._excluded};
+    for (const [rgF, col] of Object.entries(mappings)) r[rgF] = col ? (a[col]||'') : '';
+    return r;
+  });
+}
+
+// ── Output builders ────────────────────────────────────────────────────────
+function buildOutputs() {
+  const inc  = getMapped().filter(a => !a._excluded);
+  const url  = document.getElementById('rgUrl').value.trim()     || 'http://your-redgate-server:8080';
+  const tok  = document.getElementById('rgToken').value.trim()   || 'YOUR_AUTH_TOKEN';
+  const inst = document.getElementById('rgInstance').value.trim()|| 'YOUR_SQL_INSTANCE';
+  window._psOut   = buildPS(inc, url, tok, inst);
+  window._jsonOut = buildJSON(inc);
+  window._sqlOut  = buildSQL(inc);
+  showOutput('ps');
+}
+
+function buildPS(list, url, tok, inst) {
+  const byInst = {};
+  list.forEach(a => { const k = a.instance||inst; (byInst[k]=byInst[k]||[]).push(a); });
+  const customNeeded = [];
+
+  let s = `# DPA → Redgate Monitor: Annotation import script
+# Generated: ${new Date().toISOString()}
+# Alerts:    ${list.length}
+#
+# Type mappings applied:
+#   DPA "Wait Time"      → Long running query / Dynamic alerts - Waits / custom metric
+#   DPA "Resources"      → CPU utilization / OS memory / Disk space / Network utilization
+#   DPA "Administrative" → Blocking / Deadlock / Backup overdue / Job failing / SQL Server unavailable
+#   DPA "Custom"         → Custom metric + alert
+#
+# NOTE: Alerts marked [CUSTOM METRIC REQUIRED] need a custom metric created
+# in Redgate Monitor (Configuration > Custom metrics and alerts) beforehand.
+
+Import-Module .\\RedgateSQM
+\$ErrorActionPreference = 'Stop'
+
+Connect-SqlMonitor \`
+  -ServerUrl '${url}' \`
+  -AuthToken  '${tok}'
+
+# Resolve monitored instances
+\$defaultInstance = Get-RedgateMonitorMonitoredObject \`
+  -Type SqlServerInstance -Name '${inst}'
+`;
+  for (const iName of Object.keys(byInst)) {
+    if (iName && iName !== inst)
+      s += `\$inst_${san(iName)} = Get-RedgateMonitorMonitoredObject -Type SqlServerInstance -Name '${iName}'\n`;
+  }
+
+  s += `\n# Annotations\n`;
+  list.forEach(a => {
+    const r = resolveRgType(a.alertType, a.alertName, a.message);
+    const tgt = (a.instance && a.instance !== inst) ? `\$inst_${san(a.instance)}` : '\$defaultInstance';
+    const dt  = a.startTime ? `[datetime]::Parse('${toISO(a.startTime)}').ToUniversalTime()` : `[datetime]::UtcNow`;
+    const desc = `[DPA ${a.severity}][${r.rgCat} > ${r.rgType}] ${a.alertName}${a.message?' — '+a.message.slice(0,100):''}${a.threshold?' | Threshold: '+a.threshold:''}${a.currentValue?' | Value: '+a.currentValue:''}`;
+    if (r.match === 'custom') customNeeded.push(r.rgType);
+    s += `\n# DPA: ${a.alertType||'—'} → RG: ${r.rgType} [${r.match}]${r.match==='custom'?' [CUSTOM METRIC REQUIRED]':''}\nAdd-RedgateMonitorAnnotation \`\n  -Target      ${tgt} \`\n  -Description '${esc2(desc)}' \`\n  -UtcDate     ${dt} \`\n  -Source      '${r.source}'\n`;
+  });
+
+  if (customNeeded.length) {
+    const u = [...new Set(customNeeded)];
+    s += `\n# Custom metrics to build manually in Redgate Monitor:\n`;
+    u.forEach(t => s += `#   > ${t}\n`);
+    s += `# Go to: Configuration > Custom metrics and alerts > Add custom metric\n`;
+  }
+  return s;
+}
+
+function buildJSON(list) {
+  return JSON.stringify(list.map(a => {
+    const r = resolveRgType(a.alertType, a.alertName, a.message);
+    return {
+      alertName: a.alertName||'DPA Alert', dpaCategory: a.alertType||'',
+      rgAlertType: r.rgType, rgCategory: r.rgCat, matchType: r.match,
+      severity: mapSev(a.severity), serverName: a.instance||'',
+      message: a.message||'', threshold: a.threshold||'', currentValue: a.currentValue||'',
+      startTime: a.startTime||'', endTime: a.endTime||'', status: a.status||'',
+      rgNote: r.note, source: 'SolarWinds DPA'
+    };
+  }), null, 2);
+}
+
+function buildSQL(list) {
+  let s = `-- DPA Alert Annotations — staging table with RG type mapping
+-- Generated: ${new Date().toISOString()}
+
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'DPAAlertImport')
+CREATE TABLE dbo.DPAAlertImport (
+  Id               INT IDENTITY PRIMARY KEY,
+  AlertName        NVARCHAR(255),
+  DPACategory      NVARCHAR(100),
+  RGAlertType      NVARCHAR(255),
+  RGCategory       NVARCHAR(100),
+  MatchType        NVARCHAR(20),
+  Severity         NVARCHAR(20),
+  DatabaseInstance NVARCHAR(255),
+  Message          NVARCHAR(1000),
+  Threshold        NVARCHAR(50),
+  CurrentValue     NVARCHAR(50),
+  StartTime        DATETIME2,
+  EndTime          DATETIME2,
+  Status           NVARCHAR(50),
+  RGNote           NVARCHAR(500),
+  ImportedAt       DATETIME2 DEFAULT GETUTCDATE()
+);\n\n`;
+  list.forEach(a => {
+    const r = resolveRgType(a.alertType, a.alertName, a.message);
+    s += `INSERT INTO dbo.DPAAlertImport (AlertName,DPACategory,RGAlertType,RGCategory,MatchType,Severity,DatabaseInstance,Message,Threshold,CurrentValue,StartTime,EndTime,Status,RGNote) VALUES (${sq(a.alertName)},${sq(a.alertType)},${sq(r.rgType)},${sq(r.rgCat)},${sq(r.match)},${sq(a.severity)},${sq(a.instance)},${sq(a.message)},${sq(a.threshold)},${sq(a.currentValue)},${sqdt(a.startTime)},${sqdt(a.endTime)},${sq(a.status)},${sq(r.note)});\n`;
+  });
+  s += `\n-- Alerts needing custom metric setup in Redgate Monitor:\nSELECT DISTINCT RGAlertType, RGNote FROM dbo.DPAAlertImport WHERE MatchType = 'custom';\n`;
+  return s;
+}
+
+function showOutput(mode) {
+  outputMode = mode;
+  ['ps','json','sql'].forEach(m => {
+    const id = 'oTab' + m.charAt(0).toUpperCase() + m.slice(1);
+    document.getElementById(id).classList.toggle('active', m === mode);
+  });
+  const notes = {
+    ps:   'Run this .ps1 with the Redgate Monitor PowerShell module. Each alert is annotated with its mapped RG type. Alerts flagged [CUSTOM METRIC REQUIRED] need a custom metric built in Redgate Monitor first.',
+    json: 'POST this JSON to a webhook or routing layer. Each record carries both the DPA category and the resolved Redgate Monitor alert type for downstream logic.',
+    sql:  'Creates a staging table with full type mapping columns. The query at the bottom lists which alert types need custom metrics built in Redgate Monitor.'
+  };
+  document.getElementById('outputNote').textContent = notes[mode];
+  const out = mode==='ps' ? window._psOut : mode==='json' ? window._jsonOut : window._sqlOut;
+  document.getElementById('outputBlock').textContent = out || '(return to the Preview tab and click Generate outputs)';
+}
+
+function copyOutput() {
+  navigator.clipboard.writeText(document.getElementById('outputBlock').textContent)
+    .then(() => { const b = event.target; b.textContent = 'Copied!'; setTimeout(() => b.textContent = 'Copy to clipboard', 1800); });
+}
+function downloadOutput() {
+  const ext = outputMode==='ps'?'.ps1':outputMode==='json'?'.json':'.sql';
+  const a = document.createElement('a');
+  a.href = 'data:text/plain;charset=utf-8,' + encodeURIComponent(document.getElementById('outputBlock').textContent);
+  a.download = 'dpa_to_redgate' + ext; a.click();
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function mapSev(s) { const v=(s||'').toLowerCase(); return v==='high'?'High':v==='medium'||v==='med'?'Medium':'Low'; }
+function san(s)    { return (s||'').replace(/[^a-zA-Z0-9]/g,'_'); }
+function esc(s)    { return (s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function esc2(s)   { return (s||'').replace(/'/g,"''"); }
+function sq(s)     { return s ? `N'${(s||'').replace(/'/g,"''")}'` : 'NULL'; }
+function sqdt(s)   { return s && s.trim() ? `'${s.trim()}'` : 'NULL'; }
+function toISO(s)  { try { return new Date(s).toISOString(); } catch { return s; } }
+</script>
+</body>
+</html>
