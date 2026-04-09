@@ -475,6 +475,12 @@
     <div class="card">
       <div class="section-title">Column mapping</div>
       <p style="font-size:12px;color:var(--text2);margin-bottom:14px" id="mapSubtitle">DPA column → Redgate Monitor field. Auto-matched where column names align — override any below.</p>
+      <div id="conditionsNotice" class="info-box hidden">
+        <strong>SQL Sentry conditions export detected.</strong> This file contains alert <em>definitions</em> (rules), not triggered alert instances.
+        Fields extracted: <code>Name</code>, <code>EvaluationFrequency</code>, <code>MaximumAllowedDuration</code>.
+        The tool will map each condition name to its nearest Redgate Monitor alert type so you can recreate your monitoring setup.
+        To import historical alert <em>instances</em> instead, export from <strong>File → Export Data</strong> in the Alerts log view.
+      </div>
       <div id="mappingUI"></div>
     </div>
     <div class="card">
@@ -684,12 +690,62 @@ function parseCSV() {
   const raw = document.getElementById('rawPaste').value.trim();
   if (!raw) { alert('No data to parse.'); return; }
   const lines = raw.split('\n').filter(l => l.trim());
+
+  // Detect SQL Sentry conditions export: rows look like {Key:Value,Key:Value,...}
+  if (sourceMode === 'sqlsentry' && /^\s*\{[A-Za-z]/.test(lines[0])) {
+    parseSSConditionsExport(lines);
+    return;
+  }
+
+  document.getElementById('conditionsNotice').classList.add('hidden');
   colHeaders = splitCSV(lines[0]);
   alerts = lines.slice(1).map((l, i) => {
     const vals = splitCSV(l), obj = {_id: i, _excluded: false};
     colHeaders.forEach((h, j) => obj[h] = (vals[j] || '').trim());
     return obj;
   });
+  buildMappingUI();
+  switchTab(1);
+}
+
+// Parse SQL Sentry {Key:Value,...} conditions export format
+function parseSSConditionsExport(lines) {
+  const records = [];
+
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    const record = {};
+
+    // Name: text up to next comma-then-UppercaseKey or end-of-object
+    const nameM = line.match(/(?:^|[,{])Name:([^,}]+)/);
+    if (nameM) record['Name'] = nameM[1].trim();
+
+    // Timestamps use HH:MM:SS — safe to match by pattern
+    const evalM = line.match(/EvaluationFrequency:(\d{2}:\d{2}:\d{2})/);
+    if (evalM) record['EvaluationFrequency'] = evalM[1];
+
+    const durM = line.match(/MaximumAllowedDuration:(\d{2}:\d{2}:\d{2})/);
+    if (durM) record['MaximumAllowedDuration'] = durM[1];
+
+    // IdlePeriod (cool-down / re-alert frequency)
+    const idleM = line.match(/IdlePeriod:(\d{2}:\d{2}:\d{2})/);
+    if (idleM) record['IdlePeriod'] = idleM[1];
+
+    if (record['Name']) records.push(record);
+  }
+
+  if (!records.length) {
+    alert('Could not extract any named conditions from this file. Make sure it is a valid SQL Sentry export.');
+    return;
+  }
+
+  // Build ordered headers from keys present across all records
+  const keySet = new Set();
+  records.forEach(r => Object.keys(r).forEach(k => keySet.add(k)));
+  colHeaders = [...keySet];
+
+  alerts = records.map((r, i) => ({...r, _id: i, _excluded: false}));
+  document.getElementById('conditionsNotice').classList.remove('hidden');
   buildMappingUI();
   switchTab(1);
 }
@@ -715,9 +771,9 @@ function buildMappingUI() {
     endTime:      find(colHeaders, ['endtime','end_time','resolved']),
     alertType:    find(colHeaders, ['conditiontype','type','category','alerttype','alert_type']),
     message:      find(colHeaders, ['notes','message','description','detail','msg']),
-    threshold:    find(colHeaders, ['threshold','limit']),
-    currentValue: find(colHeaders, ['currentvalue','value','current_value','actual']),
-    status:       find(colHeaders, ['status','state','duration'])
+    threshold:    find(colHeaders, ['evaluationfrequency','threshold','limit']),
+    currentValue: find(colHeaders, ['maximumallowedduration','currentvalue','value','actual']),
+    status:       find(colHeaders, ['status','state','duration','idleperiod'])
   } : {
     alertName:    find(colHeaders, ['alertname','alert_name','name','title']),
     severity:     find(colHeaders, ['severity','level','priority']),
