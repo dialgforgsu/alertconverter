@@ -430,8 +430,8 @@
       <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileIn').click()">
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
         <span id="dropLabel">Drop a DPA CSV or ZIP here, or click to browse</span>
-        <br><span style="font-size:11px;opacity:.7">Supports .csv, .txt, and .zip (multiple files)</span>
-        <input type="file" id="fileIn" accept=".csv,.txt,.zip" style="display:none" onchange="handleFile(event)">
+        <br><span style="font-size:11px;opacity:.7">Supports .csv, .txt, .zip, and .condition files (multiple allowed)</span>
+        <input type="file" id="fileIn" accept=".csv,.txt,.zip,.condition" style="display:none" multiple onchange="handleFile(event)">
       </div>
       <label>Or paste CSV data directly (header row required):</label>
       <textarea id="rawPaste" rows="7" id="rawPaste" placeholder="AlertName,Severity,DatabaseInstance,StartTime,AlertType,Message,Threshold,CurrentValue&#10;High CPU Wait,High,PROD-SQL-01,2026-04-01 08:12:00,Resources,CPU wait exceeded threshold,80,94,Ended..."></textarea>
@@ -481,10 +481,10 @@
       <div class="section-title">Column mapping</div>
       <p style="font-size:12px;color:var(--text2);margin-bottom:14px" id="mapSubtitle">DPA column → Redgate Monitor field. Auto-matched where column names align — override any below.</p>
       <div id="conditionsNotice" class="info-box hidden">
-        <strong>SQL Sentry conditions export detected.</strong> This file contains alert <em>definitions</em> (rules), not triggered alert instances.
-        Fields extracted: <code>Name</code>, <code>EvaluationFrequency</code>, <code>MaximumAllowedDuration</code>.
-        The tool will map each condition name to its nearest Redgate Monitor alert type so you can recreate your monitoring setup.
-        To import historical alert <em>instances</em> instead, export from <strong>File → Export Data</strong> in the Alerts log view.
+        <strong>SQL Sentry .condition files detected.</strong> Each file is an alert definition (rule), not a triggered instance.
+        Fields extracted: <code>Name</code>, <code>Severity</code>, <code>Tags</code>, <code>Areas</code>, threshold from <code>RuleDefinition</code>, and evaluation frequency.
+        Each condition is mapped to its nearest Redgate Monitor alert type so you can recreate your monitoring setup.
+        To import triggered alert history instead, export from <strong>File → Export Data</strong> in the SQL Sentry Alerts log view.
       </div>
       <div id="mappingUI"></div>
     </div>
@@ -597,11 +597,17 @@ const SS_TYPE_MAP = [
   {keys:['failed login','login failure','login failed','failed logins'], rgType:'SQL Server log entry',              rgCat:'Administrative',match:'partial', source:'Custom',                 note:'Monitor SQL error log for authentication failures'},
   {keys:['index','fragmentation','rebuild','reorganize'],                rgType:'Custom metric',                     rgCat:'Custom',        match:'custom',  source:'Custom',                 note:'T-SQL on sys.dm_db_index_physical_stats'},
   {keys:['tempdb','temp db','tempdb contention'],                        rgType:'Custom metric',                     rgCat:'Custom',        match:'custom',  source:'Custom',                 note:'T-SQL for tempdb contention/space metrics'},
+  // .condition file inferred types (from inferConditionAlertType)
+  {keys:['ha/dr','database state'],                                       rgType:'AG / Cluster failover',             rgCat:'Administrative',match:'direct',  source:'Custom',                 note:'HA/DR condition — availability group or mirroring event'},
+  {keys:['security/audit'],                                               rgType:'SQL Server log entry',              rgCat:'Administrative',match:'partial', source:'Custom',                 note:'Security/Audit condition — monitor SQL error log or Extended Events'},
+  {keys:['service broker'],                                               rgType:'Custom metric',                     rgCat:'Custom',        match:'custom',  source:'Custom',                 note:'Service Broker alert — build custom metric on sys.transmission_queue'},
+  {keys:['scheduler/resource'],                                           rgType:'Custom metric',                     rgCat:'Resources',     match:'custom',  source:'Custom',                 note:'Build custom metric on sys.dm_os_schedulers or sys.dm_os_ring_buffers'},
+  {keys:['query performance'],                                            rgType:'Dynamic alerts — Query throughput', rgCat:'Resources',     match:'direct',  source:'Custom',                 note:'Query performance condition — maps to ML-powered throughput alert'},
+  {keys:['configuration/advisory','replication'],                        rgType:'SQL Server log entry',              rgCat:'Administrative',match:'partial', source:'Custom',                 note:'Configuration or replication change — monitor via SQL Server error log'},
   // Advisory conditions
   {keys:['advisory','performance analysis','high performance power','common criteria'], rgType:'Dynamic alerts — Performance', rgCat:'Resources', match:'partial', source:'Custom', note:'SQL Sentry Advisory condition — map to Dynamic alerts or custom metric'},
-  {keys:['general'],                                                      rgType:'Annotation (threshold)',            rgCat:'Administrative',match:'partial', source:'Custom',                 note:'General condition — review and assign specific RG alert type'},
   {keys:['failsafe'],                                                     rgType:'SQL Server unavailable',            rgCat:'Administrative',match:'direct',  source:'Custom',                 note:'Failsafe condition maps to connectivity/availability alert'},
-  {keys:['audit'],                                                        rgType:'SQL Server log entry',              rgCat:'Administrative',match:'partial', source:'Custom',                 note:'Audit condition — map to log entry monitoring in Redgate Monitor'},
+  {keys:['general'],                                                      rgType:'Annotation (threshold)',            rgCat:'Administrative',match:'partial', source:'Custom',                 note:'General condition — review and assign specific RG alert type'},
 ];
 
 const RG_FIELDS = {
@@ -623,7 +629,7 @@ function setSource(mode) {
     ? 'Convert SolarWinds DPA alert exports into Redgate Monitor–ready PowerShell scripts, webhook JSON, or SQL — with full alert type mapping applied automatically.'
     : 'Convert SolarWinds SQL Sentry alert exports into Redgate Monitor–ready PowerShell scripts, webhook JSON, or SQL — with full SQL Sentry alert type mapping applied automatically.';
   document.getElementById('importCardTitle').textContent = isDpa ? 'Import DPA alert export' : 'Import SQL Sentry alert export';
-  document.getElementById('dropLabel').textContent    = isDpa ? 'Drop a DPA CSV or ZIP here, or click to browse' : 'Drop a SQL Sentry CSV or ZIP here, or click to browse';
+  document.getElementById('dropLabel').textContent    = isDpa ? 'Drop a DPA CSV or ZIP here, or click to browse' : 'Drop SQL Sentry .condition files, a ZIP, or a CSV here, or click to browse';
   document.getElementById('mapSubtitle').textContent  = isDpa
     ? 'DPA column → Redgate Monitor field. Auto-matched where column names align — override any below.'
     : 'SQL Sentry column → Redgate Monitor field. Auto-matched where column names align — override any below.';
@@ -652,13 +658,35 @@ function switchTab(n) {
 const dz = document.getElementById('dropZone');
 dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
 dz.addEventListener('dragleave', () => dz.classList.remove('over'));
-dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('over'); const f = e.dataTransfer.files[0]; if (f) readFile(f); });
-function handleFile(e) { readFile(e.target.files[0]); }
-function readFile(f) {
-  if (f.name.toLowerCase().endsWith('.zip')) { handleZip(f); return; }
+dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('over'); handleFileList(e.dataTransfer.files); });
+function handleFile(e) { handleFileList(e.target.files); }
+
+function handleFileList(fileList) {
+  if (!fileList || !fileList.length) return;
+  const files = Array.from(fileList);
+  const zip = files.find(f => f.name.toLowerCase().endsWith('.zip'));
+  if (zip) { handleZip(zip); return; }
+  const conditions = files.filter(f => f.name.toLowerCase().endsWith('.condition'));
+  if (conditions.length) { handleConditionFiles(conditions); return; }
+  readCSVFile(files[0]);
+}
+
+function readCSVFile(f) {
   const r = new FileReader();
   r.onload = e => { document.getElementById('rawPaste').value = e.target.result.replace(/^\ufeff/, ''); parseCSV(); };
   r.readAsText(f, 'UTF-8');
+}
+
+async function handleConditionFiles(files) {
+  const allAlerts = [], summary = [];
+  let id = 0;
+  for (const f of files) {
+    const text = await f.text();
+    const record = parseConditionJSON(text.replace(/^\ufeff/, ''), id);
+    if (record) { allAlerts.push(record); summary.push({name: f.name, fmt: 'ss-condition', count: 1}); id++; }
+  }
+  if (!allAlerts.length) { alert('Could not parse any .condition files.'); return; }
+  finalizeConditionImport(allAlerts, summary);
 }
 
 // ── ZIP import ─────────────────────────────────────────────────────────────
@@ -667,61 +695,67 @@ async function handleZip(f) {
   try { zip = await JSZip.loadAsync(f); }
   catch(e) { alert('Could not read ZIP file: ' + e.message); return; }
 
-  const entries = Object.values(zip.files).filter(e => !e.dir && /\.(csv|txt)$/i.test(e.name));
-  if (!entries.length) { alert('No CSV or TXT files found inside the ZIP.'); return; }
+  const entries = Object.values(zip.files).filter(e => !e.dir && /\.(csv|txt|condition)$/i.test(e.name));
+  if (!entries.length) { alert('No CSV, TXT, or .condition files found inside the ZIP.'); return; }
 
   const allAlerts = [], summary = [];
   let idOffset = 0;
 
   for (const entry of entries) {
     const text = (await entry.async('string')).replace(/^\ufeff/, '');
-    const fmt  = detectFormat(text);
-    const rows = fmt === 'ss-conditions'
-      ? normalizeConditionsText(text, idOffset)
-      : normalizeCSVText(text, fmt, idOffset);
     const fname = entry.name.split('/').pop();
+    let rows, fmt;
+    if (fname.toLowerCase().endsWith('.condition')) {
+      const record = parseConditionJSON(text, idOffset);
+      rows = record ? [record] : [];
+      fmt = 'ss-condition';
+    } else {
+      fmt = detectFormat(text);
+      rows = normalizeCSVText(text, fmt, idOffset);
+    }
     summary.push({ name: fname, fmt, count: rows.length });
     allAlerts.push(...rows);
     idOffset += rows.length;
   }
 
   if (!allAlerts.length) { alert('No alerts could be parsed from the files in the ZIP.'); return; }
+  finalizeConditionImport(allAlerts, summary);
+}
 
-  // Infer source mode from majority of files
-  const ssCount  = summary.filter(s => s.fmt.startsWith('ss')).length;
-  sourceMode = ssCount >= summary.length / 2 ? 'sqlsentry' : 'dpa';
+// Shared finalizer for both ZIP and direct .condition file imports
+function finalizeConditionImport(allAlerts, summary) {
+  const hasConditions = summary.some(s => s.fmt === 'ss-condition');
+  const ssCount = summary.filter(s => s.fmt.startsWith('ss')).length;
+  sourceMode = ssCount >= Math.ceil(summary.length / 2) ? 'sqlsentry' : 'dpa';
   document.getElementById('srcDpa').classList.toggle('active', sourceMode === 'dpa');
   document.getElementById('srcSS').classList.toggle('active', sourceMode === 'sqlsentry');
 
   alerts = allAlerts;
-  // Normalized alerts use RG field names directly as keys — identity mapping
   colHeaders = ['alertName','severity','instance','startTime','endTime','alertType','message','threshold','currentValue','status'];
 
-  const FMT_LABEL = { dpa:'SolarWinds DPA', 'ss-csv':'SQL Sentry (alerts)', 'ss-conditions':'SQL Sentry (conditions)' };
-  const rows = summary.map(s =>
+  const FMT_LABEL = { dpa:'SolarWinds DPA', 'ss-csv':'SQL Sentry (alert log)', 'ss-condition':'SQL Sentry (.condition)' };
+  const fileRows = summary.map(s =>
     `<div style="display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:7px 0;border-bottom:0.5px solid var(--border)">
       <span style="font-size:12px;font-family:monospace;word-break:break-all">${esc(s.name)}</span>
       <span class="badge badge-direct">${FMT_LABEL[s.fmt] || s.fmt}</span>
-      <span style="font-size:12px;color:var(--text2);white-space:nowrap">${s.count} alert${s.count!==1?'s':''}</span>
+      <span style="font-size:12px;color:var(--text2);white-space:nowrap">${s.count} condition${s.count!==1?'s':''}</span>
     </div>`
   ).join('');
   document.getElementById('zipSummaryBody').innerHTML =
-    rows + `<div style="font-size:12px;color:var(--text2);margin-top:10px;padding-top:8px">
-      <strong style="color:var(--text)">${allAlerts.length}</strong> alerts total from
-      <strong style="color:var(--text)">${entries.length}</strong> file${entries.length!==1?'s':''} — fields auto-mapped below.
+    fileRows + `<div style="font-size:12px;color:var(--text2);margin-top:10px;padding-top:8px">
+      <strong style="color:var(--text)">${allAlerts.length}</strong> condition${allAlerts.length!==1?'s':''} from
+      <strong style="color:var(--text)">${summary.length}</strong> file${summary.length!==1?'s':''} — fields auto-mapped below.
     </div>`;
   document.getElementById('zipSummary').classList.remove('hidden');
-  document.getElementById('conditionsNotice').classList.add('hidden');
+  document.getElementById('conditionsNotice').classList.toggle('hidden', !hasConditions);
 
   buildMappingUI();
   switchTab(1);
 }
 
-// Detect the format of a single file's text content
+// Detect format of a CSV/TXT file (not .condition — those are handled by extension)
 function detectFormat(text) {
-  const first = text.trim().split('\n')[0];
-  if (/^\s*\{[A-Za-z]/.test(first)) return 'ss-conditions';
-  const h = first.toLowerCase();
+  const h = text.trim().split('\n')[0].toLowerCase();
   if (h.includes('target') || h.includes('condition type') || h.includes('ack')) return 'ss-csv';
   return 'dpa';
 }
@@ -773,31 +807,94 @@ function normalizeCSVText(text, fmt, idOffset) {
   });
 }
 
-// Normalize a SQL Sentry {Key:Value,...} conditions file into RG-keyed objects
-function normalizeConditionsText(text, idOffset) {
-  const results = [];
-  for (const line of text.split('\n')) {
-    if (!/^\s*\{[A-Za-z]/.test(line)) continue;
-    const nameM = line.match(/(?:^|[,{])Name:([^,}]+)/);
-    if (!nameM) continue;
-    const evalM = line.match(/EvaluationFrequency:(\d{2}:\d{2}:\d{2})/);
-    const durM  = line.match(/MaximumAllowedDuration:(\d{2}:\d{2}:\d{2})/);
-    const idleM = line.match(/IdlePeriod:(\d{2}:\d{2}:\d{2})/);
-    results.push({
-      _id: idOffset + results.length, _excluded: false,
-      alertName:    nameM[1].trim(),
-      severity:     '',
-      instance:     '',
-      startTime:    '',
-      endTime:      '',
-      alertType:    'General',
-      message:      '',
-      threshold:    evalM ? evalM[1] : '',
-      currentValue: durM  ? durM[1]  : '',
-      status:       idleM ? idleM[1] : '',
-    });
-  }
-  return results;
+// ── .condition JSON parser ─────────────────────────────────────────────────
+function parseConditionJSON(text, id) {
+  let d;
+  try { d = JSON.parse(text); } catch { return null; }
+  if (!d || !d.Name) return null;
+
+  const SEV = {0:'Low', 1:'Low', 2:'Medium', 3:'High'};
+  const severity = SEV[d.Severity] !== undefined ? SEV[d.Severity] : 'Medium';
+
+  let threshold = '', counter = '';
+  try {
+    const rd = JSON.parse(d.RuleDefinition || '{}');
+    function getThresh(n) {
+      if (!n) return '';
+      if (n.Right && n.Right.Value !== undefined) return String(n.Right.Value);
+      if (n.Children && n.Children.length) return getThresh(n.Children[0]);
+      return '';
+    }
+    function getCounter(n) {
+      if (!n) return '';
+      if (n.Left) {
+        if (n.Left.CounterName) return n.Left.CounterName;
+        if (n.Left.Query) return 'SQL query';
+      }
+      if (n.Children && n.Children.length) return getCounter(n.Children[0]);
+      return '';
+    }
+    threshold = getThresh(rd);
+    counter = getCounter(rd);
+  } catch {}
+
+  const areas = (d.Areas || []).join(' ').toLowerCase();
+  const tags  = (d.Tags  || '').toLowerCase();
+  const name  = (d.Name  || '').toLowerCase();
+  const alertType = inferConditionAlertType(areas, tags, name);
+
+  const notes = [];
+  if (counter) notes.push('Counter: ' + counter);
+  if (threshold) notes.push('Threshold: ' + threshold);
+  if (d.EvaluationFrequency) notes.push('Eval every: ' + d.EvaluationFrequency);
+
+  return {
+    _id: id, _excluded: false,
+    alertName:    d.Name,
+    severity,
+    instance:     '',
+    startTime:    '',
+    endTime:      '',
+    alertType,
+    message:      notes.join(' | '),
+    threshold,
+    currentValue: '',
+    status:       d.IdlePeriod || '',
+  };
+}
+
+function inferConditionAlertType(areas, tags, name) {
+  if (areas.includes('cpu') || tags.includes('cpu') || name.includes('cpu') || name.includes('processor'))
+    return 'CPU';
+  if (areas.includes('memory') || tags.includes('memory') || name.includes('memory') || name.includes('paged to disk') || name.includes('stolen memory') || name.includes('windows memory') || name.includes('available memory'))
+    return 'Memory';
+  if (areas.includes('waits') || name.includes('wait') || name.includes('threadpool'))
+    return 'Wait Time';
+  if (name.includes('disk') || name.includes('free space') || name.includes('file growth') || name.includes('file shrink') || name.includes('files count') || name.includes('volume') || name.includes('vlf') || name.includes('auto-growth') || name.includes('auto growth'))
+    return 'Disk Space';
+  if (name.includes('blocking') || name.includes('deadlock'))
+    return 'Blocking';
+  if (name.includes('backup'))
+    return 'Backup';
+  if (name.includes('agent job') || name.includes('sql agent') || name.includes('job failure') || name.includes('job failed'))
+    return 'Job';
+  if (name.includes('replication'))
+    return 'Replication';
+  if (name.includes('database state') || name.includes('offline') || name.includes('suspect') || name.includes('recovery') || name.includes('database lost') || name.includes('database in'))
+    return 'Database State';
+  if (name.includes('availability') || name.includes('replica') || name.includes('mirroring') || name.includes(' ag ') || tags.includes('ha/dr'))
+    return 'HA/DR';
+  if (name.includes('login') || name.includes('malware') || name.includes('spectre') || tags.includes('audit') || name.includes('audit'))
+    return 'Security/Audit';
+  if (name.includes('service broker'))
+    return 'Service Broker';
+  if (name.includes('scheduler') || name.includes('worker') || name.includes('thread pool') || name.includes('threadpool') || name.includes('numa') || name.includes('hyper-v') || name.includes('vcpu') || name.includes('connections in use') || name.includes('active user sessions') || name.includes('network bottleneck') || name.includes('network outbound'))
+    return 'Scheduler/Resource';
+  if (name.includes('recompile') || name.includes('ad hoc') || name.includes('in-memory') || name.includes('index') || name.includes('partition') || name.includes('row'))
+    return 'Query Performance';
+  if (name.includes('compatibility') || name.includes('maxdop') || name.includes('trace flag') || name.includes('trigger') || name.includes('identity') || name.includes('check constraint') || name.includes('foreign key') || name.includes('page verification') || name.includes('patched') || name.includes('power plan') || name.includes('compatiblity'))
+    return 'Configuration/Advisory';
+  return 'General';
 }
 
 // ── Sample data ────────────────────────────────────────────────────────────
@@ -834,16 +931,19 @@ function loadSampleSS() {
   parseCSV();
 }
 
-// ── CSV parsing ────────────────────────────────────────────────────────────
+// ── CSV parsing (paste box / single CSV file) ──────────────────────────────
 function parseCSV() {
   const raw = document.getElementById('rawPaste').value.trim();
   if (!raw) { alert('No data to parse.'); return; }
   const lines = raw.split('\n').filter(l => l.trim());
 
-  // Detect SQL Sentry conditions export: rows look like {Key:Value,Key:Value,...}
-  if (sourceMode === 'sqlsentry' && /^\s*\{[A-Za-z]/.test(lines[0])) {
-    parseSSConditionsExport(lines);
-    return;
+  // If pasted text looks like a JSON .condition object, parse it as such
+  if (/^\s*\{/.test(lines[0]) && lines[0].includes('"Name"')) {
+    const record = parseConditionJSON(raw, 0);
+    if (record) {
+      finalizeConditionImport([record], [{name: 'pasted condition', fmt: 'ss-condition', count: 1}]);
+      return;
+    }
   }
 
   document.getElementById('conditionsNotice').classList.add('hidden');
@@ -854,48 +954,6 @@ function parseCSV() {
     colHeaders.forEach((h, j) => obj[h] = (vals[j] || '').trim());
     return obj;
   });
-  buildMappingUI();
-  switchTab(1);
-}
-
-// Parse SQL Sentry {Key:Value,...} conditions export format
-function parseSSConditionsExport(lines) {
-  const records = [];
-
-  for (const line of lines) {
-    if (!line.trim()) continue;
-    const record = {};
-
-    // Name: text up to next comma-then-UppercaseKey or end-of-object
-    const nameM = line.match(/(?:^|[,{])Name:([^,}]+)/);
-    if (nameM) record['Name'] = nameM[1].trim();
-
-    // Timestamps use HH:MM:SS — safe to match by pattern
-    const evalM = line.match(/EvaluationFrequency:(\d{2}:\d{2}:\d{2})/);
-    if (evalM) record['EvaluationFrequency'] = evalM[1];
-
-    const durM = line.match(/MaximumAllowedDuration:(\d{2}:\d{2}:\d{2})/);
-    if (durM) record['MaximumAllowedDuration'] = durM[1];
-
-    // IdlePeriod (cool-down / re-alert frequency)
-    const idleM = line.match(/IdlePeriod:(\d{2}:\d{2}:\d{2})/);
-    if (idleM) record['IdlePeriod'] = idleM[1];
-
-    if (record['Name']) records.push(record);
-  }
-
-  if (!records.length) {
-    alert('Could not extract any named conditions from this file. Make sure it is a valid SQL Sentry export.');
-    return;
-  }
-
-  // Build ordered headers from keys present across all records
-  const keySet = new Set();
-  records.forEach(r => Object.keys(r).forEach(k => keySet.add(k)));
-  colHeaders = [...keySet];
-
-  alerts = records.map((r, i) => ({...r, _id: i, _excluded: false}));
-  document.getElementById('conditionsNotice').classList.remove('hidden');
   buildMappingUI();
   switchTab(1);
 }
