@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Alert → Redgate Monitor Converter</title>
+<script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
 <style>
   :root {
     --bg: #ffffff;
@@ -428,9 +429,9 @@
       <div class="section-title" id="importCardTitle">Import DPA alert export</div>
       <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileIn').click()">
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
-        <span id="dropLabel">Drop a DPA CSV export here, or click to browse</span>
-        <br><span style="font-size:11px;opacity:.7">Supports .csv and .txt</span>
-        <input type="file" id="fileIn" accept=".csv,.txt" style="display:none" onchange="handleFile(event)">
+        <span id="dropLabel">Drop a DPA CSV or ZIP here, or click to browse</span>
+        <br><span style="font-size:11px;opacity:.7">Supports .csv, .txt, and .zip (multiple files)</span>
+        <input type="file" id="fileIn" accept=".csv,.txt,.zip" style="display:none" onchange="handleFile(event)">
       </div>
       <label>Or paste CSV data directly (header row required):</label>
       <textarea id="rawPaste" rows="7" id="rawPaste" placeholder="AlertName,Severity,DatabaseInstance,StartTime,AlertType,Message,Threshold,CurrentValue&#10;High CPU Wait,High,PROD-SQL-01,2026-04-01 08:12:00,Resources,CPU wait exceeded threshold,80,94,Ended..."></textarea>
@@ -472,6 +473,10 @@
 
   <!-- ── TAB 1: MAP ── -->
   <div id="tab1" class="hidden">
+    <div class="card hidden" id="zipSummary">
+      <div class="section-title">ZIP import summary</div>
+      <div id="zipSummaryBody"></div>
+    </div>
     <div class="card">
       <div class="section-title">Column mapping</div>
       <p style="font-size:12px;color:var(--text2);margin-bottom:14px" id="mapSubtitle">DPA column → Redgate Monitor field. Auto-matched where column names align — override any below.</p>
@@ -618,7 +623,7 @@ function setSource(mode) {
     ? 'Convert SolarWinds DPA alert exports into Redgate Monitor–ready PowerShell scripts, webhook JSON, or SQL — with full alert type mapping applied automatically.'
     : 'Convert SolarWinds SQL Sentry alert exports into Redgate Monitor–ready PowerShell scripts, webhook JSON, or SQL — with full SQL Sentry alert type mapping applied automatically.';
   document.getElementById('importCardTitle').textContent = isDpa ? 'Import DPA alert export' : 'Import SQL Sentry alert export';
-  document.getElementById('dropLabel').textContent    = isDpa ? 'Drop a DPA CSV export here, or click to browse' : 'Drop a SQL Sentry CSV export here, or click to browse';
+  document.getElementById('dropLabel').textContent    = isDpa ? 'Drop a DPA CSV or ZIP here, or click to browse' : 'Drop a SQL Sentry CSV or ZIP here, or click to browse';
   document.getElementById('mapSubtitle').textContent  = isDpa
     ? 'DPA column → Redgate Monitor field. Auto-matched where column names align — override any below.'
     : 'SQL Sentry column → Redgate Monitor field. Auto-matched where column names align — override any below.';
@@ -649,7 +654,151 @@ dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('ove
 dz.addEventListener('dragleave', () => dz.classList.remove('over'));
 dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('over'); const f = e.dataTransfer.files[0]; if (f) readFile(f); });
 function handleFile(e) { readFile(e.target.files[0]); }
-function readFile(f) { const r = new FileReader(); r.onload = e => { document.getElementById('rawPaste').value = e.target.result.replace(/^\ufeff/, ''); parseCSV(); }; r.readAsText(f, 'UTF-8'); }
+function readFile(f) {
+  if (f.name.toLowerCase().endsWith('.zip')) { handleZip(f); return; }
+  const r = new FileReader();
+  r.onload = e => { document.getElementById('rawPaste').value = e.target.result.replace(/^\ufeff/, ''); parseCSV(); };
+  r.readAsText(f, 'UTF-8');
+}
+
+// ── ZIP import ─────────────────────────────────────────────────────────────
+async function handleZip(f) {
+  let zip;
+  try { zip = await JSZip.loadAsync(f); }
+  catch(e) { alert('Could not read ZIP file: ' + e.message); return; }
+
+  const entries = Object.values(zip.files).filter(e => !e.dir && /\.(csv|txt)$/i.test(e.name));
+  if (!entries.length) { alert('No CSV or TXT files found inside the ZIP.'); return; }
+
+  const allAlerts = [], summary = [];
+  let idOffset = 0;
+
+  for (const entry of entries) {
+    const text = (await entry.async('string')).replace(/^\ufeff/, '');
+    const fmt  = detectFormat(text);
+    const rows = fmt === 'ss-conditions'
+      ? normalizeConditionsText(text, idOffset)
+      : normalizeCSVText(text, fmt, idOffset);
+    const fname = entry.name.split('/').pop();
+    summary.push({ name: fname, fmt, count: rows.length });
+    allAlerts.push(...rows);
+    idOffset += rows.length;
+  }
+
+  if (!allAlerts.length) { alert('No alerts could be parsed from the files in the ZIP.'); return; }
+
+  // Infer source mode from majority of files
+  const ssCount  = summary.filter(s => s.fmt.startsWith('ss')).length;
+  sourceMode = ssCount >= summary.length / 2 ? 'sqlsentry' : 'dpa';
+  document.getElementById('srcDpa').classList.toggle('active', sourceMode === 'dpa');
+  document.getElementById('srcSS').classList.toggle('active', sourceMode === 'sqlsentry');
+
+  alerts = allAlerts;
+  // Normalized alerts use RG field names directly as keys — identity mapping
+  colHeaders = ['alertName','severity','instance','startTime','endTime','alertType','message','threshold','currentValue','status'];
+
+  const FMT_LABEL = { dpa:'SolarWinds DPA', 'ss-csv':'SQL Sentry (alerts)', 'ss-conditions':'SQL Sentry (conditions)' };
+  const rows = summary.map(s =>
+    `<div style="display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:7px 0;border-bottom:0.5px solid var(--border)">
+      <span style="font-size:12px;font-family:monospace;word-break:break-all">${esc(s.name)}</span>
+      <span class="badge badge-direct">${FMT_LABEL[s.fmt] || s.fmt}</span>
+      <span style="font-size:12px;color:var(--text2);white-space:nowrap">${s.count} alert${s.count!==1?'s':''}</span>
+    </div>`
+  ).join('');
+  document.getElementById('zipSummaryBody').innerHTML =
+    rows + `<div style="font-size:12px;color:var(--text2);margin-top:10px;padding-top:8px">
+      <strong style="color:var(--text)">${allAlerts.length}</strong> alerts total from
+      <strong style="color:var(--text)">${entries.length}</strong> file${entries.length!==1?'s':''} — fields auto-mapped below.
+    </div>`;
+  document.getElementById('zipSummary').classList.remove('hidden');
+  document.getElementById('conditionsNotice').classList.add('hidden');
+
+  buildMappingUI();
+  switchTab(1);
+}
+
+// Detect the format of a single file's text content
+function detectFormat(text) {
+  const first = text.trim().split('\n')[0];
+  if (/^\s*\{[A-Za-z]/.test(first)) return 'ss-conditions';
+  const h = first.toLowerCase();
+  if (h.includes('target') || h.includes('condition type') || h.includes('ack')) return 'ss-csv';
+  return 'dpa';
+}
+
+// Normalize a standard CSV (DPA or SQL Sentry alert log) into RG-keyed objects
+function normalizeCSVText(text, fmt, idOffset) {
+  const lines = text.split('\n').filter(l => l.trim());
+  if (lines.length < 2) return [];
+  const headers = splitCSV(lines[0]);
+  const am = fmt === 'ss-csv' ? {
+    alertName:    find(headers, ['name','alertname','alert_name','title']),
+    severity:     find(headers, ['severity','level','priority']),
+    instance:     find(headers, ['target','databaseinstance','instance','server','host']),
+    startTime:    find(headers, ['starttime','start_time','timestamp','datetime','time','occurred']),
+    endTime:      find(headers, ['endtime','end_time','resolved']),
+    alertType:    find(headers, ['conditiontype','type','category','alerttype','alert_type']),
+    message:      find(headers, ['notes','message','description','detail','msg']),
+    threshold:    find(headers, ['evaluationfrequency','threshold','limit']),
+    currentValue: find(headers, ['maximumallowedduration','currentvalue','value','actual']),
+    status:       find(headers, ['status','state','duration','idleperiod'])
+  } : {
+    alertName:    find(headers, ['alertname','alert_name','name','title']),
+    severity:     find(headers, ['severity','level','priority']),
+    instance:     find(headers, ['databaseinstance','instance','server','host','database_instance']),
+    startTime:    find(headers, ['starttime','start_time','timestamp','datetime','time','occurred']),
+    endTime:      find(headers, ['endtime','end_time','resolved']),
+    alertType:    find(headers, ['alerttype','type','category','alert_type']),
+    message:      find(headers, ['message','description','detail','msg']),
+    threshold:    find(headers, ['threshold','limit']),
+    currentValue: find(headers, ['currentvalue','value','current_value','actual']),
+    status:       find(headers, ['status','state'])
+  };
+  return lines.slice(1).map((l, i) => {
+    const vals = splitCSV(l), raw = {};
+    headers.forEach((h, j) => raw[h] = (vals[j] || '').trim());
+    return {
+      _id: idOffset + i, _excluded: false,
+      alertName:    am.alertName    ? (raw[am.alertName]    || '') : '',
+      severity:     am.severity     ? (raw[am.severity]     || '') : '',
+      instance:     am.instance     ? (raw[am.instance]     || '') : '',
+      startTime:    am.startTime    ? (raw[am.startTime]    || '') : '',
+      endTime:      am.endTime      ? (raw[am.endTime]      || '') : '',
+      alertType:    am.alertType    ? (raw[am.alertType]    || '') : '',
+      message:      am.message      ? (raw[am.message]      || '') : '',
+      threshold:    am.threshold    ? (raw[am.threshold]    || '') : '',
+      currentValue: am.currentValue ? (raw[am.currentValue] || '') : '',
+      status:       am.status       ? (raw[am.status]       || '') : '',
+    };
+  });
+}
+
+// Normalize a SQL Sentry {Key:Value,...} conditions file into RG-keyed objects
+function normalizeConditionsText(text, idOffset) {
+  const results = [];
+  for (const line of text.split('\n')) {
+    if (!/^\s*\{[A-Za-z]/.test(line)) continue;
+    const nameM = line.match(/(?:^|[,{])Name:([^,}]+)/);
+    if (!nameM) continue;
+    const evalM = line.match(/EvaluationFrequency:(\d{2}:\d{2}:\d{2})/);
+    const durM  = line.match(/MaximumAllowedDuration:(\d{2}:\d{2}:\d{2})/);
+    const idleM = line.match(/IdlePeriod:(\d{2}:\d{2}:\d{2})/);
+    results.push({
+      _id: idOffset + results.length, _excluded: false,
+      alertName:    nameM[1].trim(),
+      severity:     '',
+      instance:     '',
+      startTime:    '',
+      endTime:      '',
+      alertType:    'General',
+      message:      '',
+      threshold:    evalM ? evalM[1] : '',
+      currentValue: durM  ? durM[1]  : '',
+      status:       idleM ? idleM[1] : '',
+    });
+  }
+  return results;
+}
 
 // ── Sample data ────────────────────────────────────────────────────────────
 function loadSample() {
@@ -698,6 +847,7 @@ function parseCSV() {
   }
 
   document.getElementById('conditionsNotice').classList.add('hidden');
+  document.getElementById('zipSummary').classList.add('hidden');
   colHeaders = splitCSV(lines[0]);
   alerts = lines.slice(1).map((l, i) => {
     const vals = splitCSV(l), obj = {_id: i, _excluded: false};
