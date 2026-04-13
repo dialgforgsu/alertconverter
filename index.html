@@ -311,6 +311,7 @@
   .badge-direct { background: var(--green-bg);  color: var(--green-text);  border: 0.5px solid var(--green-border); }
   .badge-partial{ background: var(--amber-bg);  color: var(--amber-text);  border: 0.5px solid var(--amber-border); }
   .badge-custom { background: var(--purple-bg); color: var(--purple-text); border: 0.5px solid var(--purple-border); }
+  .badge-none   { background: var(--red-bg);    color: var(--red-text);    border: 0.5px solid var(--red-border); }
 
   /* ── Mapping grid ── */
   .map-row { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: center; margin-bottom: 8px; font-size: 12px; }
@@ -572,6 +573,12 @@ const DPA_TYPE_MAP = [
 
 // ── SQL Sentry Alert type mapping ──────────────────────────────────────────
 const SS_TYPE_MAP = [
+  // ── NOT AVAILABLE — inserted before broad keys so they always win ──────────
+  // These SQL Sentry Advisory conditions have no T-SQL-accessible equivalent
+  {keys:['sentry monitoring service','sql sentry service','monitoring service offline','sqlsentry monitoring'], rgType:'NOT AVAILABLE IN REDGATE MONITOR', rgCat:'Advisory', match:'none', source:'Custom', note:'SQL Sentry internal monitoring service health — no equivalent in Redgate Monitor. Use Redgate Monitor built-in health checks instead.'},
+  {keys:['same virtual host','replicas on same host','same hyper-v host','same vmware host'],  rgType:'NOT AVAILABLE IN REDGATE MONITOR', rgCat:'Advisory', match:'none', source:'Custom', note:'Requires VMware/Hyper-V host inventory — no T-SQL equivalent. Cannot be replicated in Redgate Monitor.'},
+  {keys:['same datastore','replicas with disks in same','vmware datastore overlap','same vmware datastore'], rgType:'NOT AVAILABLE IN REDGATE MONITOR', rgCat:'Advisory', match:'none', source:'Custom', note:'Requires VMware datastore inventory — no T-SQL equivalent. Cannot be replicated in Redgate Monitor.'},
+  {keys:['high performance power plan not enabled','power plan not enabled'],  rgType:'NOT AVAILABLE IN REDGATE MONITOR', rgCat:'Advisory', match:'none', source:'Custom', note:'Requires WMI to read Windows Power Plan — no T-SQL equivalent. Cannot be replicated in Redgate Monitor. Use OS monitoring or Group Policy auditing instead.'},
   // Resources
   {keys:['cpu','processor','high cpu','cpu usage','cpu utilization'],    rgType:'Processor (CPU) utilization',       rgCat:'Resources',     match:'direct',  source:'PerformanceDegradation', note:'Machine-level CPU threshold alert'},
   {keys:['memory','ram','memory exhaustion','memory pressure','available memory'], rgType:'OS memory available', rgCat:'Resources', match:'direct', source:'PerformanceDegradation', note:'Machine-level memory threshold'},
@@ -600,10 +607,66 @@ const SS_TYPE_MAP = [
   {keys:['scheduler/resource'],                                           rgType:'Custom metric',                     rgCat:'Resources',     match:'custom',  source:'Custom',                 note:'Build custom metric on sys.dm_os_schedulers or sys.dm_os_ring_buffers'},
   {keys:['query performance'],                                            rgType:'Dynamic alerts — Query throughput', rgCat:'Resources',     match:'direct',  source:'Custom',                 note:'Query performance condition — maps to ML-powered throughput alert'},
   {keys:['configuration/advisory','replication'],                        rgType:'SQL Server log entry',              rgCat:'Administrative',match:'partial', source:'Custom',                 note:'Configuration or replication change — monitor via SQL Server error log'},
-  // Advisory conditions
-  {keys:['advisory','performance analysis','high performance power','common criteria'], rgType:'Dynamic alerts — Performance', rgCat:'Resources', match:'partial', source:'Custom', note:'SQL Sentry Advisory condition — map to Dynamic alerts or custom metric'},
-  {keys:['failsafe'],                                                     rgType:'SQL Server unavailable',            rgCat:'Administrative',match:'direct',  source:'Custom',                 note:'Failsafe condition maps to connectivity/availability alert'},
-  {keys:['general'],                                                      rgType:'Annotation (threshold)',            rgCat:'Administrative',match:'partial', source:'Custom',                 note:'General condition — review and assign specific RG alert type'},
+  // ── Advisory Conditions Pack — solarwinds.com advisory-conditions-pack ─────
+  // Availability & Infrastructure
+  {keys:['replica send queue','replica recovery queue','send or recovery queue','hadr send queue','hadr recovery queue'], rgType:'Custom metric', rgCat:'Advisory', match:'custom', source:'Custom', note:'SELECT send_queue_size, redo_queue_size FROM sys.dm_hadr_database_replica_states WHERE send_queue_size > 3072 OR redo_queue_size > 3072 — threshold: 3 MB (3072 KB)'},
+  {keys:['mirroring send queue','mirroring redo queue','mirror send queue','mirror redo queue'], rgType:'Custom metric', rgCat:'Advisory', match:'custom', source:'Custom', note:'SELECT mirroring_send_queue_size, mirroring_redo_queue_size FROM sys.database_mirroring WHERE mirroring_guid IS NOT NULL AND (mirroring_send_queue_size > 3072 OR mirroring_redo_queue_size > 3072)'},
+  // Constraint & Index Health
+  {keys:['check constraints not trusted','untrusted check constraint','check constraint not trusted'], rgType:'Custom metric', rgCat:'Advisory', match:'custom', source:'Custom', note:'SELECT COUNT(*) FROM sys.check_constraints WHERE is_not_trusted = 1 AND is_disabled = 0 — alert when > 0; untrusted constraints block query optimizations'},
+  {keys:['foreign keys not trusted','untrusted foreign key','foreign key not trusted'], rgType:'Custom metric', rgCat:'Advisory', match:'custom', source:'Custom', note:'SELECT COUNT(*) FROM sys.foreign_keys WHERE is_not_trusted = 1 AND is_disabled = 0 — alert when > 0; run WITH CHECK CHECK CONSTRAINT to re-establish trust'},
+  {keys:['page verification check','page verify check','checksum verification check'], rgType:'Custom metric', rgCat:'Advisory', match:'custom', source:'Custom', note:"SELECT COUNT(*) FROM sys.databases WHERE page_verify_option_desc <> 'CHECKSUM' AND state_desc = 'ONLINE' AND name <> 'tempdb' — alert when > 0; use CHECKSUM not torn page detection"},
+  // Configuration Changes
+  {keys:['cost threshold of parallelism changed','cost threshold parallelism changed'], rgType:'Custom metric', rgCat:'Advisory', match:'custom', source:'Custom', note:"SELECT CAST(value_in_use AS INT) AS current_ctp FROM sys.configurations WHERE name = 'cost threshold for parallelism' — store baseline and alert on change; recommended: 50"},
+  {keys:['server maxdop changed','maxdop changed','max degree of parallelism changed'], rgType:'Custom metric', rgCat:'Advisory', match:'custom', source:'Custom', note:"SELECT CAST(value_in_use AS INT) FROM sys.configurations WHERE name = 'max degree of parallelism' — store baseline and alert on deviation"},
+  {keys:['optimize for ad hoc workloads changed','ad hoc workloads setting changed'], rgType:'Custom metric', rgCat:'Advisory', match:'custom', source:'Custom', note:"SELECT CAST(value_in_use AS INT) FROM sys.configurations WHERE name = 'optimize for ad hoc workloads' — alert when = 0 if ad hoc cache bloat is also detected"},
+  // CPU Scheduler conditions
+  {keys:['failed to create worker','schedulers failed to create','cannot create worker thread'], rgType:'Custom metric', rgCat:'Resources', match:'custom', source:'Custom', note:'SELECT COUNT(*) FROM sys.dm_os_schedulers WHERE failed_to_create_worker = 1 — alert when > 0; typically caused by memory pressure preventing new worker thread creation'},
+  {keys:['hot added scheduler','cpu hot added','scheduler hot added'],     rgType:'Custom metric',              rgCat:'Resources',     match:'custom',  source:'Custom',                 note:"SELECT COUNT(*) FROM sys.dm_os_schedulers WHERE status LIKE '%HOT ADDED%' — detects dynamic CPU expansion; supplement with SQL error log monitoring for hot-add events"},
+  {keys:['visible offline scheduler','schedulers visible offline','cpu visible offline'], rgType:'Custom metric', rgCat:'Resources', match:'custom', source:'Custom', note:"SELECT COUNT(*) FROM sys.dm_os_schedulers WHERE is_online = 0 AND scheduler_id < 255 AND status NOT LIKE '%HIDDEN%' — alert when > 0; offline CPUs cause NUMA imbalance and licensing waste"},
+  {keys:['unused scheduler','cpu unused scheduler','disabled scheduler'],   rgType:'Custom metric',              rgCat:'Resources',     match:'custom',  source:'Custom',                 note:'SELECT COUNT(*) FROM sys.dm_os_schedulers WHERE is_online = 0 AND scheduler_id < 255 — alert when > 0; caused by affinity masking or licensing restrictions'},
+  {keys:['high cpu signal wait','cpu signal wait','signal wait percent'],   rgType:'Custom metric',              rgCat:'Resources',     match:'custom',  source:'Custom',                 note:"SELECT CAST(SUM(signal_wait_time_ms) AS FLOAT)/NULLIF(SUM(wait_time_ms),0)*100 FROM sys.dm_os_wait_stats WHERE wait_type NOT IN ('SLEEP_TASK','SQLTRACE_BUFFER_FLUSH','WAITFOR') — alert when > 20%"},
+  {keys:['high compiles','batch compilations rate','high compilation rate'], rgType:'Custom metric', rgCat:'Resources', match:'custom', source:'Custom', note:"SELECT cntr_value FROM sys.dm_os_performance_counters WHERE counter_name = 'SQL Compilations/sec' AND object_name LIKE '%SQL Statistics%' — alert when > 15% of Batch Requests/sec; indicates poor plan reuse"},
+  {keys:['high recompiles','sql recompilations rate','high recompile rate'], rgType:'Custom metric', rgCat:'Resources', match:'custom', source:'Custom', note:"SELECT cntr_value FROM sys.dm_os_performance_counters WHERE counter_name = 'SQL Re-Compilations/sec' AND object_name LIKE '%SQL Statistics%' — alert when > 15% of initial compiles/sec"},
+  {keys:['high runnable task','runnable task count','runnable tasks count'], rgType:'Custom metric', rgCat:'Resources', match:'custom', source:'Custom', note:'SELECT AVG(runnable_tasks_count) AS avg_runnable FROM sys.dm_os_schedulers WHERE scheduler_id < 255 AND is_online = 1 — alert when avg > 10; strong indicator of CPU pressure'},
+  {keys:['high cpu for non-sql','non-sql server process cpu','cpu for non-sql process'], rgType:'Custom metric', rgCat:'Resources', match:'custom', source:'Custom', note:'Approximate via sys.dm_exec_requests for SQL CPU share vs OS total. Full non-SQL attribution requires WMI. In Redgate Monitor compare machine CPU% vs SQL process CPU% as proxy.'},
+  {keys:['high cpu for single core','single core cpu saturation','per-core cpu high'], rgType:'Processor (CPU) utilization', rgCat:'Resources', match:'partial', source:'PerformanceDegradation', note:'Redgate Monitor alerts on overall CPU%. Per-core alerting requires OS monitoring. Use threshold of (100 / core_count) as a proxy for single-core saturation.'},
+  // Disk I/O & Storage conditions
+  {keys:['high disk waits and latency','disk waits and latency','high disk wait latency'], rgType:'Disk space / avg read-write time', rgCat:'Resources', match:'direct', source:'PerformanceDegradation', note:'Maps to avg read-write time alert. Latency benchmarks: <10ms=fast, 10-20ms=acceptable, 20-50ms=slow, >50ms=critical. Transaction logs: 0-2ms optimal.'},
+  {keys:['high pending disk io count','pending disk io count','pending io count high'], rgType:'Custom metric', rgCat:'Resources', match:'custom', source:'Custom', note:'SELECT SUM(pending_disk_io_count) FROM sys.dm_os_schedulers WHERE scheduler_id < 255 — alert when sum > 0 sustained; indicates I/O subsystem saturation'},
+  {keys:['high vlf count','vlf count','virtual log file count','excessive vlf'], rgType:'Custom metric', rgCat:'Advisory', match:'custom', source:'Custom', note:"SELECT COUNT(*) AS vlf_count FROM sys.dm_db_log_info(DB_ID()) — alert when > 1000 VLFs per database. Fix: shrink log then resize with one large growth increment to avoid VLF proliferation"},
+  {keys:['data file shrink','file shrink detected','shrink event detected'], rgType:'Custom metric', rgCat:'Advisory', match:'custom', source:'Custom', note:'Compare sys.master_files size over intervals: SELECT name, size FROM sys.master_files — alert when size decreases vs prior snapshot. Data file shrinks are almost always harmful to performance.'},
+  {keys:['database files count change','files count change','file count changed'], rgType:'Custom metric', rgCat:'Advisory', match:'custom', source:'Custom', note:'SELECT DB_NAME(database_id), type_desc, COUNT(*) AS file_count FROM sys.master_files GROUP BY database_id, type_desc — alert when count differs from baseline; triggers backup job review'},
+  {keys:['auto-growth disabled','autogrowth disabled','file auto-growth disabled'], rgType:'Custom metric', rgCat:'Advisory', match:'custom', source:'Custom', note:'SELECT name, DB_NAME(database_id) FROM sys.master_files WHERE is_percent_growth = 0 AND growth = 0 — alert when count > 0; disabled auto-growth risks full DML halt when space exhausted'},
+  {keys:['auto-growth exceeds free space','autogrowth exceeds free','growth exceeds free space'], rgType:'Custom metric', rgCat:'Advisory', match:'custom', source:'Custom', note:'SELECT name, (max_size - size - growth)*8/1024 AS space_debt_mb FROM sys.master_files WHERE growth > 0 AND max_size > 0 AND (max_size - size) < growth — alert when space_debt_mb > 0'},
+  // Memory & Performance conditions
+  {keys:['low page life expectancy','page life expectancy','high ple drop','ple threshold'], rgType:'Custom metric', rgCat:'Resources', match:'custom', source:'Custom', note:"SELECT cntr_value AS ple FROM sys.dm_os_performance_counters WHERE counter_name = 'Page life expectancy' AND object_name LIKE '%Buffer Manager%' — alert when PLE < (buffer_pool_gb/4)*300; check per NUMA node via '%Buffer Node%'"},
+  {keys:['memory grants pending','high memory grants pending','resource semaphore grants','sql server memory exhaustion'], rgType:'Custom metric', rgCat:'Resources', match:'custom', source:'Custom', note:"SELECT cntr_value FROM sys.dm_os_performance_counters WHERE counter_name = 'Memory Grants Pending' AND object_name LIKE '%Memory Manager%' — should always be 0; alert immediately when > 0 (correlates with RESOURCE_SEMAPHORE waits)"},
+  {keys:['sql server process paged to disk','process paged to disk','working set reduced'], rgType:'Custom metric', rgCat:'Resources', match:'custom', source:'Custom', note:'SELECT physical_memory_in_use_kb, page_fault_count FROM sys.dm_os_process_memory — alert when physical_memory_in_use_kb / committed_target_kb < 0.75; SQL Server paging to disk is a critical performance emergency'},
+  {keys:['large windows file cache','windows file cache growth','file cache contention'], rgType:'Custom metric', rgCat:'Resources', match:'custom', source:'Custom', note:'SELECT system_cache_kb, available_physical_memory_kb FROM sys.dm_os_sys_memory — alert when system_cache_kb > (total_physical_memory_kb * 0.5) and available is low; critical in SSAS environments'},
+  {keys:['high ad hoc query plans','single use plans','ad hoc plans cache bloat'], rgType:'Custom metric', rgCat:'Resources', match:'custom', source:'Custom', note:"SELECT COUNT(*)*8/1024 AS adhoc_cache_mb FROM sys.dm_exec_cached_plans WHERE usecounts = 1 AND objtype = 'Adhoc' — alert when > 10% of total cache (>64 GB RAM: use 5%); fix: enable 'optimize for ad hoc workloads'"},
+  {keys:['high average work queue','work queue count high','average work queue count'], rgType:'Custom metric', rgCat:'Resources', match:'custom', source:'Custom', note:'SELECT AVG(work_queue_count) FROM sys.dm_os_schedulers WHERE scheduler_id < 255 AND is_online = 1 — alert when avg > 1; indicates max worker threads may need increasing'},
+  {keys:['high avg wait time per user session','wait time per user session','avg wait per session high'], rgType:'Custom metric', rgCat:'Resources', match:'custom', source:'Custom', note:'SELECT SUM(r.wait_time)/NULLIF(COUNT(*),0) AS avg_wait_ms FROM sys.dm_exec_sessions s JOIN sys.dm_exec_requests r ON s.session_id=r.session_id WHERE s.is_user_process=1 — alert when avg > 50ms'},
+  // Network conditions
+  {keys:['high active user sessions','active user session count','high active sessions count'], rgType:'Custom metric', rgCat:'Resources', match:'custom', source:'Custom', note:'SELECT COUNT(*) FROM sys.dm_exec_sessions WHERE is_user_process = 1 AND last_request_start_time > DATEADD(MINUTE,-15,GETDATE()) — adjust threshold per workload; high session count alone does not always indicate a problem'},
+  {keys:['network bottleneck outbound','output queue length high','outbound network queue'], rgType:'Network utilization', rgCat:'Resources', match:'partial', source:'Custom', note:'Redgate Monitor tracks network utilization. Output Queue Length (threshold: >3 packets) requires WMI/OS monitoring. Enable the Network alert in Redgate Monitor v14+ for closest match.'},
+  // Service Broker — specific condition entries
+  {keys:['broker activation error occurred','activation error occurred broker','service broker activation error'], rgType:'Custom metric', rgCat:'Advisory', match:'custom', source:'Custom', note:"Query sys.dm_os_ring_buffers WHERE ring_buffer_type = 'RING_BUFFER_BROKER_TO_FLUSH' for activation errors, or monitor sys.dm_broker_activated_tasks WHERE spid IS NULL — alert when count > 0"},
+  {keys:['broker login connection error','broker connection login error','login connection error broker'], rgType:'Custom metric', rgCat:'Advisory', match:'custom', source:'Custom', note:'SELECT COUNT(*) FROM sys.dm_broker_connections WHERE login_state = 13 — alert when count > 0; login_state 13 = connection error in Service Broker transport layer'},
+  {keys:['poison message handling disabled','service broker poison message','poison message handling'], rgType:'Custom metric', rgCat:'Advisory', match:'custom', source:'Custom', note:'SELECT name FROM sys.service_queues WHERE is_poison_message_handling_enabled = 0 — alert when any queue has poison handling disabled; a poison message can block all queue processing indefinitely'},
+  {keys:['broker queues with issues','service broker queue issue','broker queue activation disabled'], rgType:'Custom metric', rgCat:'Advisory', match:'custom', source:'Custom', note:'SELECT COUNT(*) FROM sys.service_queues WHERE activation_procedure IS NOT NULL AND (is_activation_enabled=0 OR is_receive_enabled=0 OR is_enqueue_enabled=0) — alert when count > 0'},
+  {keys:['broker task limit reached','service broker task limit','task limit reached per sec'], rgType:'Custom metric', rgCat:'Advisory', match:'custom', source:'Custom', note:"SELECT cntr_value FROM sys.dm_os_performance_counters WHERE counter_name = 'Task Limit Reached/sec' AND object_name LIKE '%Broker Activation%' — alert when > 0; indicates activation task saturation"},
+  {keys:['transmission queue errors','broker transmission error','service broker transmission error'], rgType:'Custom metric', rgCat:'Advisory', match:'custom', source:'Custom', note:'SELECT COUNT(*) FROM sys.transmission_queue WHERE is_conversation_error = 1 — alert when count > 0; indicates Service Broker conversation failures in the transmission queue'},
+  // System Configuration
+  {keys:['common criteria compliance enabled','common criteria compliance'],  rgType:'Custom metric',            rgCat:'Advisory',      match:'custom',  source:'Custom',                 note:"SELECT CAST(value_in_use AS INT) FROM sys.configurations WHERE name = 'common criteria compliance enabled' — alert when = 1; enabling this can dramatically degrade performance on Enterprise/Datacenter editions"},
+  {keys:['numa disabled','numa awareness disabled','soft-numa disabled'],    rgType:'Custom metric',              rgCat:'Resources',     match:'custom',  source:'Custom',                 note:'SELECT COUNT(*) FROM sys.dm_os_schedulers WHERE numa_node_id = 255 AND scheduler_id < 255 — NUMA node 255 = soft-NUMA disabled; alert when count > 0 on NUMA-capable hardware; causes imbalance and performance degradation'},
+  // Transaction & Session Management
+  {keys:['incorrect compatibility level','compatibility level mismatch','wrong compatibility level'], rgType:'Custom metric', rgCat:'Advisory', match:'custom', source:'Custom', note:"SELECT name, compatibility_level FROM sys.databases WHERE compatibility_level <> (SELECT compatibility_level FROM sys.databases WHERE name = 'master') AND state_desc = 'ONLINE' — alert when count > 0 (review intentional exceptions)"},
+  {keys:['long running open transaction','open transaction age','long open transaction age'], rgType:'Long running query', rgCat:'Wait Time', match:'direct', source:'Custom', note:'Maps to Long running query alert in Redgate Monitor (≥90s). Also enable Blocking processes alert — open transactions prevent log truncation, grow tempdb under snapshot isolation, and escalate locks.'},
+  {keys:['sleeping session with open transaction','sleeping open transaction','sleeping with old open transaction'], rgType:'Custom metric', rgCat:'Advisory', match:'custom', source:'Custom', note:"SELECT s.session_id, s.host_name, s.program_name, t.transaction_begin_time FROM sys.dm_exec_sessions s JOIN sys.dm_tran_session_transactions t ON s.session_id=t.session_id WHERE s.status='sleeping' AND DATEDIFF(MINUTE,t.transaction_begin_time,GETDATE()) >= 10"},
+  // ── Advisory catch-all ──────────────────────────────────────────────────────
+  {keys:['advisory','performance analysis'],                                rgType:'Dynamic alerts — Performance',rgCat:'Resources',     match:'partial', source:'Custom',                 note:'SQL Sentry Advisory condition — review condition name and map to nearest Redgate Monitor alert type or build a custom metric. See: advisory-conditions-pack documentation.'},
+  {keys:['failsafe'],                                                        rgType:'SQL Server unavailable',     rgCat:'Administrative',match:'direct',  source:'Custom',                 note:'Failsafe condition maps to connectivity/availability alert'},
+  {keys:['general'],                                                         rgType:'Annotation (threshold)',     rgCat:'Administrative',match:'partial', source:'Custom',                 note:'General condition — review and assign specific RG alert type'},
 ];
 
 const RG_FIELDS = {
@@ -862,13 +925,13 @@ function parseConditionJSON(text, id) {
 function inferConditionAlertType(areas, tags, name) {
   if (areas.includes('cpu') || tags.includes('cpu') || name.includes('cpu') || name.includes('processor'))
     return 'CPU';
-  if (areas.includes('memory') || tags.includes('memory') || name.includes('memory') || name.includes('paged to disk') || name.includes('stolen memory') || name.includes('windows memory') || name.includes('available memory'))
+  if (areas.includes('memory') || tags.includes('memory') || name.includes('memory') || name.includes('paged to disk') || name.includes('stolen memory') || name.includes('windows memory') || name.includes('available memory') || name.includes('page life') || name.includes('memory grants') || name.includes('file cache') || name.includes('ad hoc plan'))
     return 'Memory';
   if (areas.includes('waits') || name.includes('wait') || name.includes('threadpool'))
     return 'Wait Time';
-  if (name.includes('disk') || name.includes('free space') || name.includes('file growth') || name.includes('file shrink') || name.includes('files count') || name.includes('volume') || name.includes('vlf') || name.includes('auto-growth') || name.includes('auto growth'))
+  if (name.includes('disk') || name.includes('free space') || name.includes('file growth') || name.includes('file shrink') || name.includes('files count') || name.includes('volume') || name.includes('vlf') || name.includes('auto-growth') || name.includes('auto growth') || name.includes('autogrowth') || name.includes('virtual log file'))
     return 'Disk Space';
-  if (name.includes('blocking') || name.includes('deadlock'))
+  if (name.includes('blocking') || name.includes('deadlock') || name.includes('sleeping session') || name.includes('open transaction'))
     return 'Blocking';
   if (name.includes('backup'))
     return 'Backup';
@@ -878,17 +941,17 @@ function inferConditionAlertType(areas, tags, name) {
     return 'Replication';
   if (name.includes('database state') || name.includes('offline') || name.includes('suspect') || name.includes('recovery') || name.includes('database lost') || name.includes('database in'))
     return 'Database State';
-  if (name.includes('availability') || name.includes('replica') || name.includes('mirroring') || name.includes(' ag ') || tags.includes('ha/dr'))
+  if (name.includes('availability') || name.includes('replica') || name.includes('mirroring') || name.includes(' ag ') || name.includes('send queue') || name.includes('redo queue') || tags.includes('ha/dr'))
     return 'HA/DR';
   if (name.includes('login') || name.includes('malware') || name.includes('spectre') || tags.includes('audit') || name.includes('audit'))
     return 'Security/Audit';
-  if (name.includes('service broker'))
+  if (name.includes('service broker') || name.includes('poison message') || name.includes('transmission queue') || name.includes('activation error'))
     return 'Service Broker';
-  if (name.includes('scheduler') || name.includes('worker') || name.includes('thread pool') || name.includes('threadpool') || name.includes('numa') || name.includes('hyper-v') || name.includes('vcpu') || name.includes('connections in use') || name.includes('active user sessions') || name.includes('network bottleneck') || name.includes('network outbound'))
+  if (name.includes('scheduler') || name.includes('worker') || name.includes('thread pool') || name.includes('threadpool') || name.includes('numa') || name.includes('hyper-v') || name.includes('vcpu') || name.includes('connections in use') || name.includes('active user sessions') || name.includes('network bottleneck') || name.includes('network outbound') || name.includes('runnable task') || name.includes('work queue') || name.includes('pending disk io') || name.includes('hot add') || name.includes('visible offline') || name.includes('signal wait'))
     return 'Scheduler/Resource';
-  if (name.includes('recompile') || name.includes('ad hoc') || name.includes('in-memory') || name.includes('index') || name.includes('partition') || name.includes('row'))
+  if (name.includes('recompile') || name.includes('in-memory') || name.includes('index') || name.includes('partition') || name.includes('row') || name.includes('compile') || name.includes('compilations'))
     return 'Query Performance';
-  if (name.includes('compatibility') || name.includes('maxdop') || name.includes('trace flag') || name.includes('trigger') || name.includes('identity') || name.includes('check constraint') || name.includes('foreign key') || name.includes('page verification') || name.includes('patched') || name.includes('power plan') || name.includes('compatiblity'))
+  if (name.includes('compatibility') || name.includes('maxdop') || name.includes('trace flag') || name.includes('trigger') || name.includes('identity') || name.includes('check constraint') || name.includes('foreign key') || name.includes('page verification') || name.includes('page verify') || name.includes('patched') || name.includes('power plan') || name.includes('compatiblity') || name.includes('common criteria') || name.includes('cost threshold') || name.includes('ad hoc workloads'))
     return 'Configuration/Advisory';
   return 'General';
 }
@@ -1025,7 +1088,7 @@ function buildPreview() {
     const r = resolveRgType(a.alertType, a.alertName, a.message);
     const sev = a.severity.toLowerCase();
     const sevClass = sev==='high'?'badge-high':sev==='medium'?'badge-med':'badge-low';
-    const mClass = r.match==='direct'?'badge-direct':r.match==='partial'?'badge-partial':'badge-custom';
+    const mClass = r.match==='direct'?'badge-direct':r.match==='partial'?'badge-partial':r.match==='none'?'badge-none':'badge-custom';
     const noteHtml = r.match!=='direct' ? `<span class="note-pill">${esc(r.note)}</span>` : '';
     return `<div class="alert-item">
       <div class="alert-top">
@@ -1076,6 +1139,7 @@ function buildPS(list, url, tok, inst) {
   const byInst = {};
   list.forEach(a => { const k = a.instance||inst; (byInst[k]=byInst[k]||[]).push(a); });
   const customNeeded = [];
+  const notAvailable = [];
 
   let s = `# ${srcLabel} → Redgate Monitor: Annotation import script
 # Generated: ${new Date().toISOString()}
@@ -1139,7 +1203,9 @@ Connect-SqlMonitor \`
     const dt  = a.startTime ? `[datetime]::Parse('${toISO(a.startTime)}').ToUniversalTime()` : `[datetime]::UtcNow`;
     const desc = `[${srcLabel} ${a.severity}][${r.rgCat} > ${r.rgType}] ${a.alertName}${a.message?' — '+a.message.slice(0,100):''}${a.threshold?' | Threshold: '+a.threshold:''}${a.currentValue?' | Value: '+a.currentValue:''}`;
     if (r.match === 'custom') customNeeded.push(r.rgType);
-    s += `\n# ${srcLabel}: ${a.alertType||'—'} → RG: ${r.rgType} [${r.match}]${r.match==='custom'?' [CUSTOM METRIC REQUIRED]':''}\nAdd-RedgateMonitorAnnotation \`\n  -Target      ${tgt} \`\n  -Description '${esc2(desc)}' \`\n  -UtcDate     ${dt} \`\n  -Source      '${r.source}'\n`;
+    if (r.match === 'none') notAvailable.push(`${a.alertName} — ${r.note}`);
+    const matchLabel = r.match==='custom'?' [CUSTOM METRIC REQUIRED]':r.match==='none'?' [NOT AVAILABLE IN REDGATE MONITOR]':'';
+    s += `\n# ${srcLabel}: ${a.alertType||'—'} → RG: ${r.rgType} [${r.match}]${matchLabel}\nAdd-RedgateMonitorAnnotation \`\n  -Target      ${tgt} \`\n  -Description '${esc2(desc)}' \`\n  -UtcDate     ${dt} \`\n  -Source      '${r.source}'\n`;
   });
 
   if (customNeeded.length) {
@@ -1147,6 +1213,10 @@ Connect-SqlMonitor \`
     s += `\n# Custom metrics to build manually in Redgate Monitor:\n`;
     u.forEach(t => s += `#   > ${t}\n`);
     s += `# Go to: Configuration > Custom metrics and alerts > Add custom metric\n`;
+  }
+  if (notAvailable.length) {
+    s += `\n# !! NOT AVAILABLE IN REDGATE MONITOR — the following conditions have no equivalent:\n`;
+    [...new Set(notAvailable)].forEach(t => s += `#   > ${t}\n`);
   }
   return s;
 }
@@ -1196,6 +1266,7 @@ CREATE TABLE dbo.${tblName} (
     s += `INSERT INTO dbo.${tblName} (AlertName,SourceCategory,RGAlertType,RGCategory,MatchType,Severity,DatabaseInstance,Message,Threshold,CurrentValue,StartTime,EndTime,Status,RGNote) VALUES (${sq(a.alertName)},${sq(a.alertType)},${sq(r.rgType)},${sq(r.rgCat)},${sq(r.match)},${sq(a.severity)},${sq(a.instance)},${sq(a.message)},${sq(a.threshold)},${sq(a.currentValue)},${sqdt(a.startTime)},${sqdt(a.endTime)},${sq(a.status)},${sq(r.note)});\n`;
   });
   s += `\n-- Alerts needing custom metric setup in Redgate Monitor:\nSELECT DISTINCT RGAlertType, RGNote FROM dbo.${tblName} WHERE MatchType = 'custom';\n`;
+  s += `\n-- Alerts NOT AVAILABLE in Redgate Monitor (no T-SQL or RG equivalent):\nSELECT AlertName, RGNote FROM dbo.${tblName} WHERE MatchType = 'none';\n`;
   return s;
 }
 
