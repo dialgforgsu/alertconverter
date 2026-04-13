@@ -290,6 +290,12 @@
   .stat-n { font-size: 24px; font-weight: 600; }
   .stat-l { font-size: 11px; color: var(--text2); margin-top: 2px; }
 
+  /* ── Sort bar ── */
+  .sort-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .sort-bar-label { font-size: 11px; color: var(--text2); margin-right: 2px; white-space: nowrap; }
+  .sort-btn { font-size: 11px; padding: 3px 10px; border-radius: 6px; border: 0.5px solid var(--border2); background: var(--bg2); color: var(--text2); cursor: pointer; white-space: nowrap; }
+  .sort-btn.active { background: var(--blue-bg); border-color: var(--blue-border); color: var(--blue-text); font-weight: 500; }
+
   /* ── Alert list ── */
   .alert-item { padding: 10px 0; border-bottom: 0.5px solid var(--border); }
   .alert-item:last-child { border-bottom: none; }
@@ -369,6 +375,20 @@
     .step-btn { flex-direction: row; border-right: none; border-bottom: 0.5px solid var(--border); }
     .step-btn:last-child { border-bottom: none; }
   }
+
+  @media print {
+    body { background: #fff; color: #111; }
+    .stepper, .btn, .btn-group, footer, #tab0, #tab1, #tab3,
+    .sort-bar, .pdf-btn-row, input[type="checkbox"] { display: none !important; }
+    #tab2 { display: block !important; }
+    .stats-grid { display: flex; gap: 16px; margin-bottom: 16px; }
+    .stat-card { border: 0.5px solid #ccc; border-radius: 6px; padding: 8px 14px; }
+    .card { box-shadow: none; border: 0.5px solid #ccc; }
+    .alert-item { break-inside: avoid; }
+    .print-header { display: block !important; font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+    @page { margin: 18mm 14mm; }
+  }
+  .print-header { display: none; }
 </style>
 </head>
 <body>
@@ -501,11 +521,23 @@
   <div id="tab2" class="hidden">
     <div class="stats-grid" id="statsBar"></div>
     <div class="card" id="alertListCard">
+      <div class="print-header" id="printHeader"></div>
       <div class="section-title">Mapped alerts</div>
       <p style="font-size:12px;color:var(--text2);margin-bottom:12px" id="previewSubtitle">Each alert type has been matched to its Redgate Monitor equivalent. Uncheck any alerts to exclude from the export.</p>
+      <div class="sort-bar">
+        <span class="sort-bar-label">Sort by:</span>
+        <button class="sort-btn" id="sb-name"      onclick="setSort('alertName')">Name</button>
+        <button class="sort-btn" id="sb-severity"  onclick="setSort('severity')">Severity</button>
+        <button class="sort-btn" id="sb-instance"  onclick="setSort('instance')">Instance</button>
+        <button class="sort-btn active" id="sb-startTime" onclick="setSort('startTime')">Start time ↓</button>
+        <button class="sort-btn" id="sb-match"     onclick="setSort('match')">Match type</button>
+      </div>
       <div id="alertList"></div>
     </div>
-    <button class="btn btn-primary" onclick="switchTab(3);buildOutputs()">Generate outputs →</button>
+    <div class="pdf-btn-row" style="display:flex;gap:10px;align-items:center;margin-bottom:4px">
+      <button class="btn btn-primary" onclick="switchTab(3);buildOutputs()">Generate outputs →</button>
+      <button class="btn" onclick="exportPreviewPDF()">Export preview as PDF</button>
+    </div>
   </div>
 
   <!-- ── TAB 3: EXPORT ── -->
@@ -547,6 +579,7 @@
 <script>
 // ── State ──────────────────────────────────────────────────────────────────
 let alerts = [], colHeaders = [], mappings = {}, outputMode = 'ps', sourceMode = 'dpa';
+let previewSort = { col: 'startTime', dir: -1 }; // col: field name, dir: 1=asc, -1=desc
 
 // ── DPA Alert type mapping ─────────────────────────────────────────────────
 const DPA_TYPE_MAP = [
@@ -1071,20 +1104,58 @@ function buildMappingUI() {
 function find(arr, keys) { return arr.find(h => keys.includes(h.toLowerCase().replace(/[\s_]/g,''))) || ''; }
 
 // ── Preview ────────────────────────────────────────────────────────────────
-function buildPreview() {
-  const mapped = getMapped();
-  const high = mapped.filter(a => a.severity.toLowerCase() === 'high').length;
-  const med  = mapped.filter(a => a.severity.toLowerCase() === 'medium').length;
-  const low  = mapped.filter(a => ['low','info'].includes(a.severity.toLowerCase())).length;
+const SEV_ORDER = { high: 0, medium: 1, low: 2, info: 2 };
+const MATCH_ORDER = { none: 0, partial: 1, custom: 2, direct: 3 };
+
+function sortMapped(mapped) {
+  const { col, dir } = previewSort;
+  return [...mapped].sort((a, b) => {
+    let av, bv;
+    if (col === 'severity') {
+      av = SEV_ORDER[a.severity.toLowerCase()] ?? 9;
+      bv = SEV_ORDER[b.severity.toLowerCase()] ?? 9;
+    } else if (col === 'match') {
+      const ra = resolveRgType(a.alertType, a.alertName, a.message);
+      const rb = resolveRgType(b.alertType, b.alertName, b.message);
+      av = MATCH_ORDER[ra.match] ?? 9;
+      bv = MATCH_ORDER[rb.match] ?? 9;
+    } else {
+      av = (a[col] || '').toLowerCase();
+      bv = (b[col] || '').toLowerCase();
+    }
+    if (av < bv) return -dir;
+    if (av > bv) return  dir;
+    return 0;
+  });
+}
+
+function setSort(col) {
+  if (previewSort.col === col) {
+    previewSort.dir *= -1;
+  } else {
+    previewSort.col = col;
+    previewSort.dir = col === 'startTime' ? -1 : 1;
+  }
+  renderAlertList(getMapped());
+  updateSortButtons();
+}
+
+function updateSortButtons() {
+  const { col, dir } = previewSort;
+  const labels = { alertName: 'Name', severity: 'Severity', instance: 'Instance', startTime: 'Start time', match: 'Match type' };
+  ['alertName','severity','instance','startTime','match'].forEach(c => {
+    const btn = document.getElementById('sb-' + (c === 'alertName' ? 'name' : c === 'startTime' ? 'startTime' : c));
+    if (!btn) return;
+    const arrow = col === c ? (dir === 1 ? ' ↑' : ' ↓') : '';
+    btn.textContent = (labels[c] || c) + arrow;
+    btn.classList.toggle('active', col === c);
+  });
+}
+
+function renderAlertList(mapped) {
+  const sorted = sortMapped(mapped);
   const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : 'DPA';
-
-  document.getElementById('statsBar').innerHTML = `
-    <div class="stat-card"><div class="stat-n">${mapped.length}</div><div class="stat-l">Total alerts</div></div>
-    <div class="stat-card"><div class="stat-n" style="color:var(--red-text)">${high}</div><div class="stat-l">High</div></div>
-    <div class="stat-card"><div class="stat-n" style="color:var(--amber-text)">${med}</div><div class="stat-l">Medium</div></div>
-    <div class="stat-card"><div class="stat-n" style="color:var(--green-text)">${low}</div><div class="stat-l">Low</div></div>`;
-
-  const rows = mapped.map(a => {
+  const rows = sorted.map(a => {
     const r = resolveRgType(a.alertType, a.alertName, a.message);
     const sev = a.severity.toLowerCase();
     const sevClass = sev==='high'?'badge-high':sev==='medium'?'badge-med':'badge-low';
@@ -1092,7 +1163,7 @@ function buildPreview() {
     const noteHtml = r.match!=='direct' ? `<span class="note-pill">${esc(r.note)}</span>` : '';
     return `<div class="alert-item">
       <div class="alert-top">
-        <input type="checkbox" checked style="margin-top:3px" onchange="alerts[${a._id}]._excluded=!this.checked">
+        <input type="checkbox" ${a._excluded?'':'checked'} style="margin-top:3px" onchange="alerts[${a._id}]._excluded=!this.checked">
         <div>
           <div class="alert-name">${esc(a.alertName||'(unnamed)')}</div>
           <div class="alert-meta">${esc(a.instance||'—')} &middot; ${esc(a.startTime||'—')}</div>
@@ -1108,9 +1179,32 @@ function buildPreview() {
       </div>
     </div>`;
   }).join('');
-
   document.getElementById('alertList').innerHTML = rows || '<p style="color:var(--text2);font-size:13px">No alerts parsed yet.</p>';
+}
+
+function buildPreview() {
+  const mapped = getMapped();
+  const high = mapped.filter(a => a.severity.toLowerCase() === 'high').length;
+  const med  = mapped.filter(a => a.severity.toLowerCase() === 'medium').length;
+  const low  = mapped.filter(a => ['low','info'].includes(a.severity.toLowerCase())).length;
+  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : 'DPA';
+
+  document.getElementById('statsBar').innerHTML = `
+    <div class="stat-card"><div class="stat-n">${mapped.length}</div><div class="stat-l">Total alerts</div></div>
+    <div class="stat-card"><div class="stat-n" style="color:var(--red-text)">${high}</div><div class="stat-l">High</div></div>
+    <div class="stat-card"><div class="stat-n" style="color:var(--amber-text)">${med}</div><div class="stat-l">Medium</div></div>
+    <div class="stat-card"><div class="stat-n" style="color:var(--green-text)">${low}</div><div class="stat-l">Low</div></div>`;
+
+  document.getElementById('printHeader').textContent =
+    `${srcLabel} → Redgate Monitor · Alert preview · ${mapped.length} alerts · ${new Date().toLocaleDateString()}`;
+
+  renderAlertList(mapped);
+  updateSortButtons();
   switchTab(2);
+}
+
+function exportPreviewPDF() {
+  window.print();
 }
 
 function getMapped() {
