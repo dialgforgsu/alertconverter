@@ -159,6 +159,9 @@
   }
   .source-btn:last-child { border-right: none; }
   .source-btn:hover { background: var(--bg2); }
+  .source-btn[draggable="true"] { cursor: grab; }
+  .source-btn.drag-over { background: var(--blue-bg); border-color: var(--blue-border); opacity:.7; }
+  .source-btn.dragging  { opacity: .35; }
   .source-btn.active {
     background: var(--blue-bg);
     color: var(--blue-text);
@@ -411,17 +414,17 @@
 
 <div class="page">
   <div class="hero">
-    <h1 id="heroTitle">DPA → Redgate Monitor</h1>
-    <p id="heroDesc">Convert SolarWinds DPA alert exports into Redgate Monitor–ready PowerShell scripts, webhook JSON, or SQL — with full alert type mapping applied automatically.</p>
+    <h1 id="heroTitle">SQL Sentry → Redgate Monitor</h1>
+    <p id="heroDesc">Convert SolarWinds SQL Sentry alert exports into Redgate Monitor–ready PowerShell scripts, webhook JSON, or SQL — with full SQL Sentry alert type mapping applied automatically.</p>
   </div>
 
   <!-- Source selector -->
   <div style="margin-bottom:1.5rem">
     <label style="margin-bottom:6px">Source tool</label>
-    <div class="source-selector">
-      <button class="source-btn active" id="srcDpa"   onclick="setSource('dpa')">SolarWinds DPA</button>
-      <button class="source-btn"        id="srcSS"    onclick="setSource('sqlsentry')">SQL Sentry</button>
-      <button class="source-btn"        id="srcIDERA" onclick="setSource('idera')">IDERA SQLdm</button>
+    <div class="source-selector" id="sourceSelector">
+      <button class="source-btn active" id="srcSS"    draggable="true" onclick="setSource('sqlsentry')">SQL Sentry</button>
+      <button class="source-btn"        id="srcDpa"   draggable="true" onclick="setSource('dpa')">SolarWinds DPA</button>
+      <button class="source-btn"        id="srcIDERA" draggable="true" onclick="setSource('idera')">IDERA</button>
     </div>
   </div>
 
@@ -462,7 +465,7 @@
 
     <!-- DPA how-to -->
     <div class="card" id="howToDpa">
-      <div class="section-title">What DPA export formats are supported?</div>
+      <div class="section-title">How to export alerts from Solarwinds DPA</div>
       <p style="font-size:12px;color:var(--text2);line-height:1.8">
         Export your active alerts from DPA's <strong>Alerts &gt; Manage Alerts</strong> view as CSV,
         or query the DPA repository database and export via SSMS. The tool expects a header row
@@ -593,7 +596,7 @@
 
 <script>
 // ── State ──────────────────────────────────────────────────────────────────
-let alerts = [], colHeaders = [], mappings = {}, outputMode = 'ps', sourceMode = 'dpa';
+let alerts = [], colHeaders = [], mappings = {}, outputMode = 'ps', sourceMode = 'sqlsentry';
 let previewSort = { col: 'startTime', dir: -1 }; // col: field name, dir: 1=asc, -1=desc
 
 // ── DPA Alert type mapping ─────────────────────────────────────────────────
@@ -633,7 +636,7 @@ const IDERA_TYPE_MAP = [
    note:'WMI service check — no T-SQL equivalent. Cannot be replicated in Redgate Monitor.'},
   {keys:['sqldm repository grooming','os metrics collection status'],
    rgType:'NOT AVAILABLE IN REDGATE MONITOR', rgCat:'Operational', match:'none', source:'Custom',
-   note:'IDERA SQLdm internal health check — no equivalent in Redgate Monitor.'},
+   note:'IDERA internal health check — no equivalent in Redgate Monitor.'},
   {keys:['service tier changes'],
    rgType:'NOT AVAILABLE IN REDGATE MONITOR', rgCat:'Azure DB', match:'none', source:'Custom',
    note:'Azure platform-level event — no T-SQL equivalent. Use Azure Monitor or Azure Advisor instead.'},
@@ -933,22 +936,22 @@ function setSource(mode) {
   document.getElementById('srcDpa').classList.toggle('active',   mode === 'dpa');
   document.getElementById('srcSS').classList.toggle('active',    mode === 'sqlsentry');
   document.getElementById('srcIDERA').classList.toggle('active', mode === 'idera');
-  const titles   = { dpa: 'DPA → Redgate Monitor', sqlsentry: 'SQL Sentry → Redgate Monitor', idera: 'IDERA SQLdm → Redgate Monitor' };
+  const titles   = { dpa: 'DPA → Redgate Monitor', sqlsentry: 'SQL Sentry → Redgate Monitor', idera: 'IDERA → Redgate Monitor' };
   const descs    = {
     dpa:       'Convert SolarWinds DPA alert exports into Redgate Monitor–ready PowerShell scripts, webhook JSON, or SQL — with full alert type mapping applied automatically.',
     sqlsentry: 'Convert SolarWinds SQL Sentry alert exports into Redgate Monitor–ready PowerShell scripts, webhook JSON, or SQL — with full SQL Sentry alert type mapping applied automatically.',
     idera:     'Convert IDERA SQL Diagnostic Manager alert exports into Redgate Monitor–ready PowerShell scripts, webhook JSON, or SQL — with full SQLdm alert type mapping applied automatically.'
   };
-  const cardTitles = { dpa: 'Import DPA alert export', sqlsentry: 'Import SQL Sentry alert export', idera: 'Import IDERA SQLdm alert export' };
+  const cardTitles = { dpa: 'Import DPA alert export', sqlsentry: 'Import SQL Sentry alert export', idera: 'Import IDERA alert export' };
   const dropLabels = {
     dpa:       'Drop a DPA CSV or ZIP here, or click to browse',
     sqlsentry: 'Drop SQL Sentry .condition files, a ZIP, or a CSV here, or click to browse',
-    idera:     'Drop an IDERA SQLdm CSV or ZIP here, or click to browse'
+    idera:     'Drop an IDERA CSV or ZIP here, or click to browse'
   };
   const mapSubs = {
     dpa:       'DPA column → Redgate Monitor field. Auto-matched where column names align — override any below.',
     sqlsentry: 'SQL Sentry column → Redgate Monitor field. Auto-matched where column names align — override any below.',
-    idera:     'IDERA SQLdm column → Redgate Monitor field. Auto-matched where column names align — override any below.'
+    idera:     'IDERA column → Redgate Monitor field. Auto-matched where column names align — override any below.'
   };
   document.getElementById('heroTitle').textContent       = titles[mode]    || titles.dpa;
   document.getElementById('heroDesc').textContent        = descs[mode]     || descs.dpa;
@@ -1060,7 +1063,7 @@ function finalizeConditionImport(allAlerts, summary) {
   alerts = allAlerts;
   colHeaders = ['alertName','severity','instance','startTime','endTime','alertType','message','threshold','currentValue','status'];
 
-  const FMT_LABEL = { dpa:'SolarWinds DPA', 'ss-csv':'SQL Sentry (alert log)', 'ss-condition':'SQL Sentry (.condition)', idera:'IDERA SQLdm' };
+  const FMT_LABEL = { dpa:'SolarWinds DPA', 'ss-csv':'SQL Sentry (alert log)', 'ss-condition':'SQL Sentry (.condition)', idera:'IDERA' };
   const fileRows = summary.map(s =>
     `<div style="display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:7px 0;border-bottom:0.5px solid var(--border)">
       <span style="font-size:12px;font-family:monospace;word-break:break-all">${esc(s.name)}</span>
@@ -1418,7 +1421,7 @@ function updateSortButtons() {
 
 function renderAlertList(mapped) {
   const sorted = sortMapped(mapped);
-  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'idera' ? 'IDERA SQLdm' : 'DPA';
+  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'idera' ? 'IDERA' : 'DPA';
   const rows = sorted.map(a => {
     const r = resolveRgType(a.alertType, a.alertName, a.message);
     const sev = a.severity.toLowerCase();
@@ -1451,7 +1454,7 @@ function buildPreview() {
   const high = mapped.filter(a => a.severity.toLowerCase() === 'high').length;
   const med  = mapped.filter(a => a.severity.toLowerCase() === 'medium').length;
   const low  = mapped.filter(a => ['low','info'].includes(a.severity.toLowerCase())).length;
-  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'idera' ? 'IDERA SQLdm' : 'DPA';
+  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'idera' ? 'IDERA' : 'DPA';
 
   document.getElementById('statsBar').innerHTML = `
     <div class="stat-card"><div class="stat-n">${mapped.length}</div><div class="stat-l">Total alerts</div></div>
@@ -1492,7 +1495,7 @@ function buildOutputs() {
 }
 
 function buildPS(list, url, tok, inst) {
-  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'idera' ? 'IDERA SQLdm' : 'DPA';
+  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'idera' ? 'IDERA' : 'DPA';
   const srcSlug  = sourceMode === 'sqlsentry' ? 'sqlsentry' : sourceMode === 'idera' ? 'idera' : 'dpa';
   const byInst = {};
   list.forEach(a => { const k = a.instance||inst; (byInst[k]=byInst[k]||[]).push(a); });
@@ -1580,7 +1583,7 @@ Connect-SqlMonitor \`
 }
 
 function buildJSON(list) {
-  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'idera' ? 'IDERA SQLdm' : 'SolarWinds DPA';
+  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'idera' ? 'IDERA' : 'SolarWinds DPA';
   return JSON.stringify(list.map(a => {
     const r = resolveRgType(a.alertType, a.alertName, a.message);
     return {
@@ -1595,7 +1598,7 @@ function buildJSON(list) {
 }
 
 function buildSQL(list) {
-  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'idera' ? 'IDERA SQLdm' : 'DPA';
+  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'idera' ? 'IDERA' : 'DPA';
   const tblName  = sourceMode === 'sqlsentry' ? 'SSAlertImport' : sourceMode === 'idera' ? 'IDERAAlertImport' : 'DPAAlertImport';
   let s = `-- ${srcLabel} Alert Annotations — staging table with RG type mapping
 -- Generated: ${new Date().toISOString()}
@@ -1678,6 +1681,52 @@ function toggleTheme() {
   const saved   = localStorage.getItem('theme');
   const sysDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
   applyTheme(saved || (sysDark ? 'dark' : 'light'));
+})();
+
+// Init default source (SQL Sentry)
+setSource('sqlsentry');
+
+// ── Draggable source tabs ──────────────────────────────────────────────────
+(function() {
+  const sel = document.getElementById('sourceSelector');
+  let dragged = null;
+
+  sel.addEventListener('dragstart', e => {
+    dragged = e.target.closest('.source-btn');
+    if (!dragged) return;
+    dragged.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+  });
+
+  sel.addEventListener('dragend', () => {
+    if (dragged) dragged.classList.remove('dragging');
+    sel.querySelectorAll('.source-btn').forEach(b => b.classList.remove('drag-over'));
+    dragged = null;
+  });
+
+  sel.addEventListener('dragover', e => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const target = e.target.closest('.source-btn');
+    sel.querySelectorAll('.source-btn').forEach(b => b.classList.remove('drag-over'));
+    if (target && target !== dragged) target.classList.add('drag-over');
+  });
+
+  sel.addEventListener('dragleave', e => {
+    const target = e.target.closest('.source-btn');
+    if (target) target.classList.remove('drag-over');
+  });
+
+  sel.addEventListener('drop', e => {
+    e.preventDefault();
+    const target = e.target.closest('.source-btn');
+    if (!target || target === dragged) return;
+    // Insert dragged before or after target based on horizontal position
+    const rect = target.getBoundingClientRect();
+    const after = e.clientX > rect.left + rect.width / 2;
+    sel.insertBefore(dragged, after ? target.nextSibling : target);
+    sel.querySelectorAll('.source-btn').forEach(b => b.classList.remove('drag-over'));
+  });
 })();
 
 // ── Helpers ────────────────────────────────────────────────────────────────
