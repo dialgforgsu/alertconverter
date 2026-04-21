@@ -583,7 +583,7 @@
   <div class="nav-spacer"></div>
   <button class="theme-btn" id="themeBtn" onclick="toggleTheme()">
     <svg id="themeIcon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></svg>
-    <span id="themeBtnLabel">Dark</span>
+    <span id="themeBtnLabel"></span>
   </button>
 </nav>
 
@@ -2008,7 +2008,7 @@ function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
   const isDark = theme === 'dark';
   document.getElementById('themeIcon').innerHTML    = isDark ? SUN_ICON : MOON_ICON;
-  document.getElementById('themeBtnLabel').textContent = isDark ? 'Light' : 'Dark';
+  document.getElementById('themeBtnLabel').textContent = '';
 }
 function toggleTheme() {
   const cur  = document.documentElement.getAttribute('data-theme');
