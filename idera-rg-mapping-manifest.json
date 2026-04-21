@@ -1,0 +1,1023 @@
+{
+  "manifest": {
+    "version": "1.0",
+    "source": "IDERA SQL Diagnostic Manager",
+    "target": "Redgate Monitor",
+    "generatedDate": "2026-04-21",
+    "description": "Canonical mapping of IDERA SQLdm alert types to Redgate Monitor alert type IDs, with severity consolidation and migration strategy notes.",
+    "references": [
+      "https://wiki.idera.com/display/SQLDM/SQL+Diagnostic+Manager+Documentation"
+    ]
+  },
+
+  "severityMapping": {
+    "strategy": "IDERA SQL Diagnostic Manager uses three named severity levels that map cleanly 1:1 to Redgate Monitor's three threshold bands. No downgrade rule is required — unlike SQL Sentry's advisory conditions, IDERA does not conflate best-practice advisories with operational alerts in its severity model.",
+    "ideraToRg": {
+      "Critical":      { "rgSeverity": "High",   "rgColor": "Red",   "rgThresholdLevel": 3 },
+      "Warning":       { "rgSeverity": "Medium",  "rgColor": "Amber", "rgThresholdLevel": 2 },
+      "Informational": { "rgSeverity": "Low",     "rgColor": "Blue",  "rgThresholdLevel": 1 }
+    }
+  },
+
+  "notificationMapping": {
+    "ideraTerminology": "Alert Actions + Subscriptions",
+    "rgTerminology":    "Notification profiles",
+    "strategy": "IDERA notification rules are Alert Actions (Email, SNMP, Script, SQL Server Agent job, Service Desk) attached to individual alert subscriptions. In Redgate Monitor these become Notification profiles assigned per alert type. Map each IDERA Alert Action by name to the equivalent Redgate Monitor profile and delivery channel.",
+    "channelMap": {
+      "Email (SMTP)":         "Redgate Monitor → Email notification profile",
+      "SNMP Trap":            "No native SNMP in Redgate Monitor — route via webhook to an SNMP gateway",
+      "Run Program / Script": "Redgate Monitor webhook → trigger external script",
+      "SQL Server Agent Job": "Redgate Monitor webhook → trigger Agent job via sp_start_job",
+      "Service Desk":         "Redgate Monitor webhook → ServiceNow / Jira Service Management connector"
+    }
+  },
+
+  "migrationStrategy": {
+    "phases": [
+      {
+        "phase": 1,
+        "name": "Direct Replacements",
+        "description": "Built-in Redgate Monitor alerts that replace the IDERA condition 1:1. Enable immediately — no custom metric or configuration required beyond setting thresholds.",
+        "matchType": "direct",
+        "conditionCount": 14,
+        "conditions": [
+          "SQL Server CPU Usage",
+          "OS Memory Usage",
+          "Average Disk Milliseconds Per Read/Write",
+          "OS Disk Free Space / Database Full / Log Full / Filegroup Space Full",
+          "SQL Server Data Used / Log Used",
+          "Blocked Sessions Wait Time",
+          "Deadlock",
+          "Oldest Open Transaction",
+          "Days Since Last Backup",
+          "SQL Server Status (Unavailable)",
+          "SQL Server Agent Job Failure",
+          "Cluster Failover",
+          "Availability Group Role Change / Synchronization",
+          "Query Monitor Events"
+        ]
+      },
+      {
+        "phase": 2,
+        "name": "Partial / Configured Replacements",
+        "description": "Built-in RG Monitor alerts that cover the intent but need threshold conversion (IDERA thresholds may use different units), supplemental error log monitoring, or Extended Events.",
+        "matchType": "partial",
+        "conditionCount": 10,
+        "thresholdConversionNotes": [
+          "IDERA 'Days Since Last Backup' uses days — Redgate Monitor uses hours. Multiply IDERA threshold × 24.",
+          "IDERA 'Blocked Sessions Wait Time' uses seconds — Redgate Monitor uses seconds too. Direct threshold reuse.",
+          "IDERA 'Oldest Open Transaction' is in minutes — Redgate Monitor Long Running Query is in seconds. Multiply × 60.",
+          "IDERA 'Session CPU Time' is cumulative CPU ms — Redgate Monitor Long Running Query is elapsed wall-clock time. Threshold will differ."
+        ],
+        "conditions": [
+          "VM CPU / Memory Usage (proxy via OS-level alerts)",
+          "SQL Agent Job Completion (failure-only in RG Monitor)",
+          "SQL Agent Long Running Job",
+          "SQL Server Agent Status",
+          "SQL Server Error Log / Agent Log",
+          "Data File Autogrow / Log File Autogrow",
+          "Configuration Changes (MAXDOP, CLR, etc.)",
+          "SQL Server Browser Service",
+          "Mirroring (deprecated, partial via AG/Cluster alert)",
+          "Cluster Active Node"
+        ]
+      },
+      {
+        "phase": 3,
+        "name": "Custom T-SQL Metrics",
+        "description": "No built-in Redgate Monitor equivalent. Build a Custom Metric using the provided T-SQL query. Grouped by functional area to reduce setup overhead.",
+        "matchType": "custom",
+        "consolidationGroups": [
+          {
+            "group": "Performance Counters",
+            "description": "sys.dm_os_performance_counters based metrics",
+            "conditions": ["Procedure Cache Hit Ratio", "Buffer Cache Hit Ratio", "OS Processor Queue Length (approx)"]
+          },
+          {
+            "group": "Memory Health",
+            "description": "Buffer pool, PLE, paging, and process memory",
+            "conditions": ["Page Life Expectancy", "OS Paging", "SQL Server Response Time (approx)"]
+          },
+          {
+            "group": "I/O and Storage",
+            "description": "File-level I/O rates and disk queue approximation",
+            "conditions": ["Disk Reads/Writes Per Second", "OS Average Disk Queue Length", "OS Disk Time"]
+          },
+          {
+            "group": "Session and Tempdb",
+            "description": "Active connections, per-session tempdb usage, version store",
+            "conditions": ["Client Computers / User Connections", "Session Tempdb Space Usage", "Version Store Size / Generation / Longest Running"]
+          },
+          {
+            "group": "Database Health",
+            "description": "Index fragmentation, filegroup monitoring, autogrow detection",
+            "conditions": ["Table Fragmentation", "Data File / Log File Autogrow (event detection)", "Session CPU Time (per-session query)"]
+          },
+          {
+            "group": "Wait Statistics",
+            "description": "Wait type breakdown and tempdb page latch contention",
+            "conditions": ["Tempdb Contention", "Index Row Hits", "Session CPU Time (wait analysis)"]
+          },
+          {
+            "group": "HA/DR and Replication",
+            "description": "Replication latency, DTC, mirroring queues",
+            "conditions": ["Distribution Latency", "Latent/Unsubscribed Replication Transactions", "DTC Status"]
+          },
+          {
+            "group": "Configuration Advisory",
+            "description": "Server-level configuration checks: CLR, OLE Automation, Agent XPs",
+            "conditions": ["CLR Enabled", "OLE Automation Procedures", "SQL Server Agent XPs", "Full-Text Search Catalog State"]
+          },
+          {
+            "group": "Azure SQL Metrics",
+            "description": "Azure SQL Database resource metrics via sys.dm_db_resource_stats. RG Monitor supports Azure SQL Database monitoring.",
+            "conditions": ["Average Data IO Percent", "Average Log Write Percent", "Database Average Memory Usage", "In-Memory Storage Usage", "Max Session Percent", "Max Worker Percent"]
+          }
+        ]
+      },
+      {
+        "phase": 4,
+        "name": "Not Available — Decommission or Replace",
+        "description": "Conditions requiring hypervisor APIs, WMI, IDERA internal state, or AWS CloudWatch. No T-SQL path exists.",
+        "matchType": "none",
+        "alternatives": [
+          { "condition": "Host CPU Usage",                    "alternative": "VMware vRealize Operations or Datadog/Zabbix host-level monitoring." },
+          { "condition": "Host Memory Swap / Usage",          "alternative": "VMware vRealize Operations host memory metrics." },
+          { "condition": "Host Power State",                  "alternative": "VMware vRealize or IPMI out-of-band monitoring." },
+          { "condition": "VM CPU Ready Wait",                 "alternative": "VMware vRealize: CPU Ready % metric per VM." },
+          { "condition": "VM Host Server Change",             "alternative": "VMware vCenter event log (vMotion / DRS events)." },
+          { "condition": "VM Memory Swap Delay",              "alternative": "VMware vRealize memory balloon/swap metrics." },
+          { "condition": "VM Power State",                    "alternative": "VMware vCenter or Hyper-V SCVMM." },
+          { "condition": "VM Reclaimed / Resource Config",    "alternative": "VMware vRealize resource management policies." },
+          { "condition": "WMI Service Unavailable",           "alternative": "OS-level monitoring (Datadog agent, PRTG) for WMI service health." },
+          { "condition": "SQLdm Repository Grooming",         "alternative": "IDERA internal health — no equivalent needed in Redgate Monitor." },
+          { "condition": "OS Metrics Collection Status",      "alternative": "IDERA internal collection health — no equivalent needed." },
+          { "condition": "Azure Service Tier Changes",        "alternative": "Azure Monitor Alerts on service tier change events via Azure Activity Log." },
+          { "condition": "CPU Credit Balance (RDS)",          "alternative": "AWS CloudWatch: RDSCPUCreditBalance metric." },
+          { "condition": "CPU Credit Usage (RDS)",            "alternative": "AWS CloudWatch: RDSCPUCreditUsage metric." },
+          { "condition": "Swap Usage (RDS)",                  "alternative": "AWS CloudWatch: SwapUsage metric. RDS not natively supported in Redgate Monitor standard edition." }
+        ]
+      }
+    ]
+  },
+
+  "conditions": [
+
+    {
+      "id": "IDERA-001",
+      "ideraConditionName": "SQL Server CPU Usage (Percent)",
+      "ideraCategory": "Resources",
+      "ideraDefaultSeverity": "Critical",
+      "rgAlertTypeId": "Processor (CPU) utilization",
+      "rgCategory": "Resources",
+      "matchType": "direct",
+      "recommendedRgSeverity": "High",
+      "rgColor": "Red",
+      "availableInRG": true,
+      "thresholdConversion": "Use same percentage value — units match.",
+      "migrationNote": "Machine-level CPU threshold. Covers both SQL Server process CPU and OS total CPU.",
+      "simplificationStrategy": "Direct replacement. Recommended thresholds: Low=70%, Medium=85%, High=95%."
+    },
+
+    {
+      "id": "IDERA-002",
+      "ideraConditionName": "SQL Server Memory Usage (Percent)",
+      "ideraCategory": "Resources",
+      "ideraDefaultSeverity": "Warning",
+      "rgAlertTypeId": "OS memory available",
+      "rgCategory": "Resources",
+      "matchType": "direct",
+      "recommendedRgSeverity": "High",
+      "rgColor": "Red",
+      "availableInRG": true,
+      "thresholdConversion": "IDERA uses % memory used — Redgate Monitor uses MB available. Convert: available_mb = total_ram_mb × (1 - idera_pct/100).",
+      "migrationNote": "Invert the threshold: if IDERA fires at >90% used, RG Monitor should fire at <10% of total RAM available.",
+      "simplificationStrategy": "Direct replacement. Set absolute MB threshold based on your server RAM."
+    },
+
+    {
+      "id": "IDERA-003",
+      "ideraConditionName": "Average Disk Milliseconds Per Read",
+      "ideraCategory": "Resources",
+      "ideraDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Disk space / avg read-write time",
+      "rgCategory": "Resources",
+      "matchType": "direct",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "thresholdConversion": "Units match (ms). Use same threshold value.",
+      "migrationNote": "Latency benchmarks: <10ms fast, 10–20ms acceptable, 20–50ms slow, >50ms critical. Transaction logs should be under 2ms.",
+      "simplificationStrategy": "Direct replacement. Combine read and write into a single avg read-write time alert."
+    },
+
+    {
+      "id": "IDERA-004",
+      "ideraConditionName": "Average Disk Milliseconds Per Write",
+      "ideraCategory": "Resources",
+      "ideraDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Disk space / avg read-write time",
+      "rgCategory": "Resources",
+      "matchType": "direct",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "thresholdConversion": "Units match (ms).",
+      "migrationNote": "Consolidate read and write latency into the single RG Monitor 'avg read-write time' alert.",
+      "simplificationStrategy": "Consolidate with IDERA-003 into one alert. Single threshold covers both directions."
+    },
+
+    {
+      "id": "IDERA-005",
+      "ideraConditionName": "OS Disk Free Space",
+      "ideraCategory": "Resources",
+      "ideraDefaultSeverity": "Critical",
+      "rgAlertTypeId": "Disk space",
+      "rgCategory": "Administrative",
+      "matchType": "direct",
+      "recommendedRgSeverity": "High",
+      "rgColor": "Red",
+      "availableInRG": true,
+      "thresholdConversion": "IDERA uses % free. RG Monitor uses % used. Invert: RG threshold = 100 - IDERA_threshold.",
+      "migrationNote": "Machine-level OS disk space alert. Covers all drives monitored by Redgate Monitor.",
+      "simplificationStrategy": "Direct replacement. Also set an absolute GB free threshold for large drives."
+    },
+
+    {
+      "id": "IDERA-006",
+      "ideraConditionName": "Database Full (Percent)",
+      "ideraCategory": "Databases",
+      "ideraDefaultSeverity": "Critical",
+      "rgAlertTypeId": "Disk space",
+      "rgCategory": "Administrative",
+      "matchType": "direct",
+      "recommendedRgSeverity": "High",
+      "rgColor": "Red",
+      "availableInRG": true,
+      "thresholdConversion": "IDERA % used = RG Monitor % used. Units match.",
+      "migrationNote": "Maps to Disk space alert targeting the data file volume.",
+      "simplificationStrategy": "Consolidate OS Disk Free Space, Database Full, and Log Full into a single Disk space alert family."
+    },
+
+    {
+      "id": "IDERA-007",
+      "ideraConditionName": "Log Full (Percent)",
+      "ideraCategory": "Databases",
+      "ideraDefaultSeverity": "Critical",
+      "rgAlertTypeId": "Disk space",
+      "rgCategory": "Administrative",
+      "matchType": "direct",
+      "recommendedRgSeverity": "High",
+      "rgColor": "Red",
+      "availableInRG": true,
+      "thresholdConversion": "IDERA % used = RG Monitor % used.",
+      "migrationNote": "Full transaction log is a blocking emergency. Alert at 80% for advance warning.",
+      "simplificationStrategy": "Use the Disk space alert on the volume hosting log files. Set Medium=80%, High=90%."
+    },
+
+    {
+      "id": "IDERA-008",
+      "ideraConditionName": "Filegroup Space Full",
+      "ideraCategory": "Databases",
+      "ideraDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Disk space",
+      "rgCategory": "Administrative",
+      "matchType": "direct",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "thresholdConversion": "Map to the volume hosting the filegroup's data files.",
+      "migrationNote": "Consolidate with Database Full — both trigger on the same underlying disk volume.",
+      "simplificationStrategy": "Consolidate with Database Full into one Disk space alert per volume."
+    },
+
+    {
+      "id": "IDERA-009",
+      "ideraConditionName": "SQL Server Data Used / SQL Server Log Used",
+      "ideraCategory": "Operational",
+      "ideraDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Disk space",
+      "rgCategory": "Administrative",
+      "matchType": "direct",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "thresholdConversion": "Same % used metric.",
+      "migrationNote": "Redundant with Database Full and Log Full when targeting the same volumes. Can be consolidated.",
+      "simplificationStrategy": "Consolidate all four disk-space conditions (Database Full, Log Full, OS Disk, Data Used) into one Disk space alert family per volume."
+    },
+
+    {
+      "id": "IDERA-010",
+      "ideraConditionName": "Blocked Sessions Wait Time",
+      "ideraCategory": "Sessions",
+      "ideraDefaultSeverity": "Critical",
+      "rgAlertTypeId": "Blocking processes",
+      "rgCategory": "Administrative",
+      "matchType": "direct",
+      "recommendedRgSeverity": "High",
+      "rgColor": "Red",
+      "availableInRG": true,
+      "thresholdConversion": "Both IDERA and RG Monitor use seconds for blocking wait time. Threshold reuses directly.",
+      "migrationNote": "Maps directly to Blocking processes alert. Redgate Monitor also provides a live blocking tree view.",
+      "simplificationStrategy": "Direct replacement. Use the same threshold in seconds."
+    },
+
+    {
+      "id": "IDERA-011",
+      "ideraConditionName": "Deadlock",
+      "ideraCategory": "Sessions",
+      "ideraDefaultSeverity": "Critical",
+      "rgAlertTypeId": "Deadlock (Extended Events)",
+      "rgCategory": "Administrative",
+      "matchType": "direct",
+      "recommendedRgSeverity": "High",
+      "rgColor": "Red",
+      "availableInRG": true,
+      "thresholdConversion": "Event-based — no threshold conversion needed.",
+      "migrationNote": "Redgate Monitor captures the full deadlock graph XML via Extended Events.",
+      "simplificationStrategy": "Direct replacement."
+    },
+
+    {
+      "id": "IDERA-012",
+      "ideraConditionName": "Oldest Open Transaction (Minutes)",
+      "ideraCategory": "Sessions",
+      "ideraDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Long running query",
+      "rgCategory": "Wait Time",
+      "matchType": "direct",
+      "recommendedRgSeverity": "High",
+      "rgColor": "Red",
+      "availableInRG": true,
+      "thresholdConversion": "IDERA threshold is in minutes. RG Monitor Long Running Query is in seconds. Multiply IDERA value × 60.",
+      "migrationNote": "Open transactions prevent log truncation and grow tempdb under RCSI. Also enable Blocking processes for full coverage.",
+      "simplificationStrategy": "Direct replacement. Convert threshold: IDERA 15 min → RG Monitor 900 seconds."
+    },
+
+    {
+      "id": "IDERA-013",
+      "ideraConditionName": "Days Since Last Backup",
+      "ideraCategory": "Backup",
+      "ideraDefaultSeverity": "Critical",
+      "rgAlertTypeId": "Backup overdue",
+      "rgCategory": "Administrative",
+      "matchType": "direct",
+      "recommendedRgSeverity": "High",
+      "rgColor": "Red",
+      "availableInRG": true,
+      "thresholdConversion": "IDERA threshold is in days. RG Monitor Backup overdue is in hours. Multiply IDERA value × 24.",
+      "migrationNote": "Configure separate thresholds for FULL, DIFFERENTIAL, and LOG backup types.",
+      "simplificationStrategy": "Direct replacement. Convert: IDERA 1 day → RG Monitor 24 hours."
+    },
+
+    {
+      "id": "IDERA-014",
+      "ideraConditionName": "SQL Server Status",
+      "ideraCategory": "Services",
+      "ideraDefaultSeverity": "Critical",
+      "rgAlertTypeId": "SQL Server unavailable",
+      "rgCategory": "Administrative",
+      "matchType": "direct",
+      "recommendedRgSeverity": "High",
+      "rgColor": "Red",
+      "availableInRG": true,
+      "thresholdConversion": "Event-based — no conversion.",
+      "migrationNote": "Built-in to Redgate Monitor — always enabled for every monitored instance.",
+      "simplificationStrategy": "Direct replacement. No configuration needed."
+    },
+
+    {
+      "id": "IDERA-015",
+      "ideraConditionName": "SQL Server Agent Job Failure",
+      "ideraCategory": "Services",
+      "ideraDefaultSeverity": "Critical",
+      "rgAlertTypeId": "Job failing",
+      "rgCategory": "Administrative",
+      "matchType": "direct",
+      "recommendedRgSeverity": "High",
+      "rgColor": "Red",
+      "availableInRG": true,
+      "thresholdConversion": "Event-based — no conversion.",
+      "migrationNote": "Reads msdb.dbo.sysjobhistory for run_status = 0 (failed).",
+      "simplificationStrategy": "Direct replacement."
+    },
+
+    {
+      "id": "IDERA-016",
+      "ideraConditionName": "Cluster Failover",
+      "ideraCategory": "Services",
+      "ideraDefaultSeverity": "Critical",
+      "rgAlertTypeId": "AG / Cluster failover",
+      "rgCategory": "Administrative",
+      "matchType": "direct",
+      "recommendedRgSeverity": "High",
+      "rgColor": "Red",
+      "availableInRG": true,
+      "thresholdConversion": "Event-based — no conversion.",
+      "migrationNote": "Windows Server Failover Cluster node change event.",
+      "simplificationStrategy": "Direct replacement."
+    },
+
+    {
+      "id": "IDERA-017",
+      "ideraConditionName": "Availability Group Role Change / Synchronization / Log Send / Redo Queue",
+      "ideraCategory": "Databases",
+      "ideraDefaultSeverity": "Critical",
+      "rgAlertTypeId": "AG / Cluster failover",
+      "rgCategory": "Administrative",
+      "matchType": "direct",
+      "recommendedRgSeverity": "High",
+      "rgColor": "Red",
+      "availableInRG": true,
+      "thresholdConversion": "Role change: event-based. Queue thresholds: use custom metric for send/redo KB values.",
+      "migrationNote": "Role changes map directly. Queue size thresholds (send/redo KB) require a custom metric on sys.dm_hadr_database_replica_states.",
+      "simplificationStrategy": "Use AG / Cluster failover for role changes. Add a custom metric for queue size if needed."
+    },
+
+    {
+      "id": "IDERA-018",
+      "ideraConditionName": "Query Monitor Events",
+      "ideraCategory": "Queries",
+      "ideraDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Dynamic alerts — Query throughput",
+      "rgCategory": "Resources",
+      "matchType": "direct",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "thresholdConversion": "IDERA uses event-count threshold. RG Monitor uses ML baseline deviation — no direct threshold port needed.",
+      "migrationNote": "RG Monitor's ML-powered Dynamic Alerts automatically establish a query throughput baseline and alert on significant deviations. This replaces IDERA's manual threshold-based query event count.",
+      "simplificationStrategy": "Direct replacement. Accept that RG Monitor uses an ML baseline rather than a static threshold — this is an upgrade, not a compromise."
+    },
+
+    {
+      "id": "IDERA-019",
+      "ideraConditionName": "VM CPU Usage / VM Memory Usage",
+      "ideraCategory": "Resources",
+      "ideraDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Processor (CPU) utilization",
+      "rgCategory": "Resources",
+      "matchType": "partial",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "migrationNote": "VM-reported metrics are visible at the OS level. Map to machine CPU/memory alerts in RG Monitor as a proxy. Hypervisor-specific metrics (balloon memory, CPU ready) need VMware vRealize.",
+      "simplificationStrategy": "Use OS-level CPU and memory alerts as a proxy. Accept the loss of hypervisor-layer visibility."
+    },
+
+    {
+      "id": "IDERA-020",
+      "ideraConditionName": "SQL Server Agent Job Completion",
+      "ideraCategory": "Services",
+      "ideraDefaultSeverity": "Informational",
+      "rgAlertTypeId": "Job failing",
+      "rgCategory": "Administrative",
+      "matchType": "partial",
+      "recommendedRgSeverity": "Low",
+      "rgColor": "Blue",
+      "availableInRG": true,
+      "migrationNote": "Redgate Monitor alerts on failure only, not on every completion. For completion tracking: SELECT job_id, last_run_date, last_run_outcome FROM msdb.dbo.sysjobservers.",
+      "simplificationStrategy": "Use Job failing alert for failure detection. For completion auditing, use a custom metric or query the msdb tables directly."
+    },
+
+    {
+      "id": "IDERA-021",
+      "ideraConditionName": "SQL Server Agent Long Running Job",
+      "ideraCategory": "Services",
+      "ideraDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Long running query",
+      "rgCategory": "Wait Time",
+      "matchType": "partial",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "customMetricSQL": "SELECT DATEDIFF(MINUTE, ja.start_execution_date, GETDATE()) AS running_minutes, j.name AS job_name FROM msdb.dbo.sysjobactivity ja JOIN msdb.dbo.sysjobs j ON ja.job_id = j.job_id WHERE ja.stop_execution_date IS NULL AND ja.start_execution_date IS NOT NULL ORDER BY running_minutes DESC",
+      "migrationNote": "Long running query alert covers query-level duration. For SQL Agent job duration specifically, a custom metric on sysjobactivity is more precise.",
+      "simplificationStrategy": "Use Long running query as a broad catch-all. Add the sysjobactivity custom metric for critical Agent jobs."
+    },
+
+    {
+      "id": "IDERA-022",
+      "ideraConditionName": "SQL Server Agent Status",
+      "ideraCategory": "Services",
+      "ideraDefaultSeverity": "Critical",
+      "rgAlertTypeId": "SQL Server log entry",
+      "rgCategory": "Administrative",
+      "matchType": "partial",
+      "recommendedRgSeverity": "High",
+      "rgColor": "Red",
+      "availableInRG": true,
+      "migrationNote": "No direct SQL Agent service status alert in RG Monitor. Monitor via SQL Server log entry alert — Agent startup/shutdown events are logged in the SQL Server error log with source 'SQLServerAgent'.",
+      "simplificationStrategy": "Enable SQL Server log entry alert with keyword filter 'SQLServerAgent' and 'stopped'."
+    },
+
+    {
+      "id": "IDERA-023",
+      "ideraConditionName": "SQL Server Error Log",
+      "ideraCategory": "Services",
+      "ideraDefaultSeverity": "Warning",
+      "rgAlertTypeId": "SQL Server log entry",
+      "rgCategory": "Administrative",
+      "matchType": "partial",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "migrationNote": "Configure text pattern matching in RG Monitor log entry alert. Define separate alert rules per severity class (Severity 17+ = errors, Severity 19+ = fatal resource errors).",
+      "simplificationStrategy": "One alert rule per important error class. Start with Severity >= 17 to catch actionable errors."
+    },
+
+    {
+      "id": "IDERA-024",
+      "ideraConditionName": "Data File Autogrow / Log File Autogrow",
+      "ideraCategory": "Databases",
+      "ideraDefaultSeverity": "Informational",
+      "rgAlertTypeId": "SQL Server log entry",
+      "rgCategory": "Administrative",
+      "matchType": "partial",
+      "recommendedRgSeverity": "Low",
+      "rgColor": "Blue",
+      "availableInRG": true,
+      "migrationNote": "Autogrow events are written to the SQL Server error log. Use SQL Server log entry alert with keyword 'Autogrow' as a near-real-time detection. For trend analysis, compare sys.master_files size across polling intervals.",
+      "simplificationStrategy": "Log entry alert for immediate detection. Low severity — autogrow should be investigated but is not an emergency by itself."
+    },
+
+    {
+      "id": "IDERA-025",
+      "ideraConditionName": "Mirroring Status / Role Change / Queue Sizes",
+      "ideraCategory": "Databases",
+      "ideraDefaultSeverity": "Critical",
+      "rgAlertTypeId": "AG / Cluster failover",
+      "rgCategory": "Administrative",
+      "matchType": "partial",
+      "recommendedRgSeverity": "High",
+      "rgColor": "Red",
+      "availableInRG": true,
+      "migrationNote": "Database mirroring is deprecated since SQL Server 2012. Role changes map to AG / Cluster failover. Queue metrics require a custom metric on sys.database_mirroring.",
+      "simplificationStrategy": "Use AG / Cluster failover for role changes. If still on mirroring, plan migration to Always On AGs — mirroring support is a declining investment."
+    },
+
+    {
+      "id": "IDERA-026",
+      "ideraConditionName": "Cluster Active Node",
+      "ideraCategory": "Services",
+      "ideraDefaultSeverity": "Informational",
+      "rgAlertTypeId": "AG / Cluster failover",
+      "rgCategory": "Administrative",
+      "matchType": "partial",
+      "recommendedRgSeverity": "Low",
+      "rgColor": "Blue",
+      "availableInRG": true,
+      "customMetricSQL": "SELECT NodeName AS active_node FROM sys.dm_os_cluster_nodes WHERE is_current_owner = 1",
+      "migrationNote": "AG / Cluster failover event alert captures node changes. For ongoing active-node tracking, a custom metric on sys.dm_os_cluster_nodes is cleaner.",
+      "simplificationStrategy": "Use AG / Cluster failover event alert. Add the active-node custom metric if you need a dashboard-visible indicator."
+    },
+
+    {
+      "id": "IDERA-027",
+      "ideraConditionName": "Disk Reads Per Second / Disk Writes Per Second / Disk Transfers Per Second",
+      "ideraCategory": "Resources",
+      "ideraDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Resources",
+      "matchType": "custom",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "customMetricSQL": "SELECT SUM(num_of_reads) AS total_reads, SUM(num_of_writes) AS total_writes, SUM(num_of_bytes_read)/1024/1024 AS read_mb, SUM(num_of_bytes_written)/1024/1024 AS write_mb FROM sys.dm_io_virtual_file_stats(NULL, NULL)",
+      "customMetricThreshold": "Baseline from your workload. Alert when read_mb or write_mb per collection interval exceeds 2× normal.",
+      "migrationNote": "Part of I/O & Storage consolidation group.",
+      "simplificationStrategy": "Consolidate reads, writes, and transfers into one 'I/O rate' custom metric. Use relative (baseline deviation) threshold rather than absolute."
+    },
+
+    {
+      "id": "IDERA-028",
+      "ideraConditionName": "OS Average Disk Queue Length / OS Disk Time",
+      "ideraCategory": "Resources",
+      "ideraDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Resources",
+      "matchType": "custom",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "customMetricSQL": "SELECT SUM(io_stall) / NULLIF(SUM(num_of_reads + num_of_writes), 0) AS avg_io_stall_ms FROM sys.dm_io_virtual_file_stats(NULL, NULL)",
+      "customMetricThreshold": "Alert when avg_io_stall_ms > 20 (slow); > 50 (critical)",
+      "migrationNote": "T-SQL approximation of OS disk queue. Pair with the built-in avg read-write time alert for full coverage.",
+      "simplificationStrategy": "Consolidate into I/O & Storage group. Note: avg_io_stall_ms is cumulative since SQL start — delta logic is more accurate but requires storing prior values."
+    },
+
+    {
+      "id": "IDERA-029",
+      "ideraConditionName": "OS Paging",
+      "ideraCategory": "Resources",
+      "ideraDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Resources",
+      "matchType": "custom",
+      "recommendedRgSeverity": "High",
+      "rgColor": "Red",
+      "availableInRG": true,
+      "customMetricSQL": "SELECT page_fault_count, memory_utilization_percentage, physical_memory_in_use_kb, committed_target_kb, CAST(physical_memory_in_use_kb AS FLOAT)/NULLIF(committed_target_kb,0) AS memory_ratio FROM sys.dm_os_process_memory",
+      "customMetricThreshold": "Alert when memory_ratio < 0.75 — SQL Server using <75% of its committed target indicates OS paging pressure.",
+      "migrationNote": "SQL Server being paged to disk is a critical performance emergency. Enable Lock Pages In Memory (LPIM) on all production SQL Server hosts.",
+      "simplificationStrategy": "Consolidate into Memory Health group. High severity — paging is always urgent."
+    },
+
+    {
+      "id": "IDERA-030",
+      "ideraConditionName": "Page Life Expectancy",
+      "ideraCategory": "Resources",
+      "ideraDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Resources",
+      "matchType": "custom",
+      "recommendedRgSeverity": "High",
+      "rgColor": "Red",
+      "availableInRG": true,
+      "customMetricSQL": "SELECT cntr_value AS ple_seconds FROM sys.dm_os_performance_counters WHERE counter_name = 'Page life expectancy' AND object_name LIKE '%Buffer Manager%'",
+      "customMetricThreshold": "Alert when PLE < (buffer_pool_GB / 4) × 300. Example: 16 GB pool → alert at < 1200 seconds.",
+      "migrationNote": "Check per NUMA node as well via object_name LIKE '%Buffer Node%'. A rapidly dropping PLE (even if above threshold) is more diagnostic than a single snapshot.",
+      "simplificationStrategy": "Consolidate into Memory Health group. High severity."
+    },
+
+    {
+      "id": "IDERA-031",
+      "ideraConditionName": "Procedure Cache Hit Ratio / Buffer Cache Hit Ratio",
+      "ideraCategory": "Resources",
+      "ideraDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Resources",
+      "matchType": "custom",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "customMetricSQL": "SELECT object_name, counter_name, cntr_value FROM sys.dm_os_performance_counters WHERE counter_name IN ('Cache Hit Ratio','Buffer cache hit ratio') AND object_name LIKE '%Manager%'",
+      "customMetricThreshold": "Alert when cache hit ratio < 90% (sustained; transient dips on startup are normal)",
+      "migrationNote": "Buffer cache hit ratio < 90% indicates the working set is not fitting in the buffer pool. Investigate PLE and max server memory settings.",
+      "simplificationStrategy": "Consolidate into Performance Counters group. Medium severity — informational for sizing decisions."
+    },
+
+    {
+      "id": "IDERA-032",
+      "ideraConditionName": "OS Processor Queue Length",
+      "ideraCategory": "Resources",
+      "ideraDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Resources",
+      "matchType": "custom",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "customMetricSQL": "SELECT AVG(runnable_tasks_count) AS avg_runnable FROM sys.dm_os_schedulers WHERE scheduler_id < 255 AND is_online = 1",
+      "customMetricThreshold": "Alert when avg_runnable > 10 (sustained CPU pressure)",
+      "migrationNote": "T-SQL approximation of OS processor queue length. avg_runnable_tasks > 10 correlates strongly with CPU saturation.",
+      "simplificationStrategy": "Consolidate into Performance Counters group."
+    },
+
+    {
+      "id": "IDERA-033",
+      "ideraConditionName": "SQL Server Response Time",
+      "ideraCategory": "Sessions",
+      "ideraDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Resources",
+      "matchType": "custom",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "customMetricSQL": "SELECT AVG(total_elapsed_time / execution_count) / 1000.0 AS avg_elapsed_ms FROM sys.dm_exec_query_stats WHERE execution_count > 10",
+      "customMetricThreshold": "Alert when avg_elapsed_ms > your baseline × 2. Start with > 500ms as a conservative default.",
+      "migrationNote": "IDERA measures round-trip response time to the instance. This T-SQL approximates average query elapsed time. Pair with Long Running Query for threshold-based coverage.",
+      "simplificationStrategy": "Consolidate into Query & Wait Analysis group. Use relative threshold (2× baseline) rather than absolute."
+    },
+
+    {
+      "id": "IDERA-034",
+      "ideraConditionName": "Session CPU Time",
+      "ideraCategory": "Sessions",
+      "ideraDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Long running query",
+      "rgCategory": "Wait Time",
+      "matchType": "partial",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "customMetricSQL": "SELECT session_id, cpu_time, total_elapsed_time / 1000 AS elapsed_sec, login_name, program_name FROM sys.dm_exec_sessions WHERE is_user_process = 1 AND cpu_time > 60000 ORDER BY cpu_time DESC",
+      "migrationNote": "RG Monitor Long Running Query measures wall-clock elapsed time. For CPU-time specifically, the custom metric on sys.dm_exec_sessions provides per-session CPU ms.",
+      "simplificationStrategy": "Use Long running query alert as the primary alert. Add the session CPU custom metric only if you have CPU-intensive workloads with short elapsed times."
+    },
+
+    {
+      "id": "IDERA-035",
+      "ideraConditionName": "Client Computers / User Connections",
+      "ideraCategory": "Sessions",
+      "ideraDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Resources",
+      "matchType": "custom",
+      "recommendedRgSeverity": "Low",
+      "rgColor": "Blue",
+      "availableInRG": true,
+      "customMetricSQL": "SELECT COUNT(*) AS user_connections FROM sys.dm_exec_sessions WHERE is_user_process = 1",
+      "customMetricThreshold": "Alert approaching max_connections: SELECT value_in_use FROM sys.configurations WHERE name = 'max connections'",
+      "migrationNote": "High connection count alone does not indicate a problem. Alert when approaching the max_connections limit (default: 32767, typically far above real-world peaks).",
+      "simplificationStrategy": "Consolidate into Session & Tempdb group. Low severity — capacity planning indicator, not a real-time emergency."
+    },
+
+    {
+      "id": "IDERA-036",
+      "ideraConditionName": "Session Tempdb Space Usage",
+      "ideraCategory": "Databases",
+      "ideraDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Resources",
+      "matchType": "custom",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "customMetricSQL": "SELECT TOP 5 session_id, SUM(user_objects_alloc_page_count + internal_objects_alloc_page_count) * 8 / 1024.0 AS tempdb_mb FROM sys.dm_db_session_space_usage GROUP BY session_id ORDER BY tempdb_mb DESC",
+      "customMetricThreshold": "Alert when any session exceeds 1 GB tempdb (1024 MB). Tune per workload.",
+      "migrationNote": "Individual sessions consuming excessive tempdb are a common source of contention. Identify the responsible query and application.",
+      "simplificationStrategy": "Consolidate into Session & Tempdb group."
+    },
+
+    {
+      "id": "IDERA-037",
+      "ideraConditionName": "Version Store Size / Generation Rate / Longest Running Version",
+      "ideraCategory": "Databases",
+      "ideraDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Resources",
+      "matchType": "custom",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "customMetricSQL": "SELECT SUM(version_store_reserved_page_count) * 8 / 1024 AS version_store_mb FROM sys.dm_db_file_space_usage",
+      "customMetricThreshold": "Alert when version_store_mb > 1024 (1 GB). Critical for RCSI / snapshot isolation workloads.",
+      "migrationNote": "Version store growth is driven by long-running snapshot isolation readers. Pair with the Oldest Open Transaction alert — that is almost always the root cause.",
+      "simplificationStrategy": "Consolidate into Session & Tempdb group. The version store metric is most actionable when combined with the open transaction alert."
+    },
+
+    {
+      "id": "IDERA-038",
+      "ideraConditionName": "Table / Index Fragmentation",
+      "ideraCategory": "Databases",
+      "ideraDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Resources",
+      "matchType": "custom",
+      "recommendedRgSeverity": "Low",
+      "rgColor": "Blue",
+      "availableInRG": true,
+      "customMetricSQL": "SELECT OBJECT_NAME(object_id) AS table_name, index_id, avg_fragmentation_in_percent FROM sys.dm_db_index_physical_stats(DB_ID(), NULL, NULL, NULL, 'LIMITED') WHERE avg_fragmentation_in_percent > 30 AND page_count > 1000",
+      "customMetricThreshold": "Alert when any index > 30% fragmented and > 1000 pages. Fragmentation < 30% on large indexes is typically not actionable.",
+      "migrationNote": "Index fragmentation is a maintenance concern, not a real-time incident. Low severity — drives index maintenance scheduling, not an on-call alert.",
+      "simplificationStrategy": "Consolidate into Database Health group. Low severity. Use a collection interval of 24h or less frequent."
+    },
+
+    {
+      "id": "IDERA-039",
+      "ideraConditionName": "Tempdb Contention",
+      "ideraCategory": "Databases",
+      "ideraDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Resources",
+      "matchType": "custom",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "customMetricSQL": "SELECT SUM(wait_time_ms) AS tempdb_latch_wait_ms FROM sys.dm_os_wait_stats WHERE wait_type IN ('PAGELATCH_UP','PAGELATCH_EX','PAGELATCH_SH') AND resource_description LIKE '2:%'",
+      "customMetricThreshold": "Alert when tempdb_latch_wait_ms per collection interval > 1000 (1 second of cumulative latch waits). Tune to your baseline.",
+      "migrationNote": "PFS/GAM/SGAM contention in tempdb. Resolve by adding tempdb data files (one per logical CPU, max 8). SQL Server 2016+ auto-configures this.",
+      "simplificationStrategy": "Consolidate into Wait Statistics group."
+    },
+
+    {
+      "id": "IDERA-040",
+      "ideraConditionName": "Index Row Hits",
+      "ideraCategory": "Databases",
+      "ideraDefaultSeverity": "Informational",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Resources",
+      "matchType": "custom",
+      "recommendedRgSeverity": "Low",
+      "rgColor": "Blue",
+      "availableInRG": true,
+      "customMetricSQL": "SELECT OBJECT_NAME(object_id) AS table_name, index_id, user_seeks + user_scans + user_lookups AS reads, user_updates AS writes, CAST(user_seeks + user_scans + user_lookups AS FLOAT) / NULLIF(user_updates, 0) AS read_write_ratio FROM sys.dm_db_index_usage_stats WHERE database_id = DB_ID() AND (user_seeks + user_scans + user_lookups) > 100",
+      "customMetricThreshold": "Informational — alert when read_write_ratio < 0.1 (index updated 10× more than it is read — candidate for removal)",
+      "migrationNote": "Index usage statistics reset on SQL Server restart. Use a long collection window. This is index tuning data, not an operational alert.",
+      "simplificationStrategy": "Consolidate into Database Health group. Low severity / informational only. Consider collecting daily."
+    },
+
+    {
+      "id": "IDERA-041",
+      "ideraConditionName": "Distribution Latency / Latent Replication Transactions / Unsubscribed Transactions",
+      "ideraCategory": "Administrative",
+      "ideraDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Administrative",
+      "matchType": "custom",
+      "recommendedRgSeverity": "High",
+      "rgColor": "Red",
+      "availableInRG": true,
+      "customMetricSQL": "SELECT MAX(latency) AS max_latency_sec FROM distribution.dbo.MSdistribution_status WHERE latency IS NOT NULL",
+      "customMetricThreshold": "Alert when max_latency_sec > your RPO target. For transaction replication: typically > 60 seconds is a Warning, > 300 seconds is Critical.",
+      "migrationNote": "Run on the distributor or publisher. Requires access to the distribution database. Alert threshold should match your replication RPO SLA.",
+      "simplificationStrategy": "Consolidate into HA/DR & Replication group. High severity — replication lag directly affects data currency for subscribers."
+    },
+
+    {
+      "id": "IDERA-042",
+      "ideraConditionName": "DTC Status",
+      "ideraCategory": "Administrative",
+      "ideraDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Administrative",
+      "matchType": "custom",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "customMetricSQL": "SELECT COUNT(*) AS open_distributed_txns FROM sys.dm_tran_distributed_transaction_details",
+      "customMetricThreshold": "Alert when open_distributed_txns > 0 sustained for > 5 minutes (indicates a stalled distributed transaction)",
+      "migrationNote": "DTC service health itself requires WMI. The T-SQL proxy monitors for orphaned distributed transactions, which is the most actionable DTC indicator.",
+      "simplificationStrategy": "Consolidate into HA/DR & Replication group. Accept that DTC service state requires OS-level monitoring."
+    },
+
+    {
+      "id": "IDERA-043",
+      "ideraConditionName": "Full-Text Search Catalog State / Last Full-Text Catalog Population",
+      "ideraCategory": "Administrative",
+      "ideraDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Administrative",
+      "matchType": "custom",
+      "recommendedRgSeverity": "Low",
+      "rgColor": "Blue",
+      "availableInRG": true,
+      "customMetricSQL": "SELECT name, crawl_end_date, DATEDIFF(HOUR, crawl_end_date, GETDATE()) AS hours_since_crawl, has_crawl_completed FROM sys.fulltext_catalogs WHERE has_crawl_completed = 0 OR crawl_end_date IS NULL",
+      "customMetricThreshold": "Alert when any catalog has not completed a crawl within 24 hours",
+      "migrationNote": "Only relevant for instances using SQL Server Full-Text Search. Disable this alert if FTS is not in use.",
+      "simplificationStrategy": "Consolidate into Configuration Advisory group. Low severity — maintenance concern."
+    },
+
+    {
+      "id": "IDERA-044",
+      "ideraConditionName": "CLR Enabled",
+      "ideraCategory": "Operational",
+      "ideraDefaultSeverity": "Informational",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Advisory",
+      "matchType": "custom",
+      "recommendedRgSeverity": "Low",
+      "rgColor": "Blue",
+      "availableInRG": true,
+      "customMetricSQL": "SELECT CAST(value_in_use AS INT) AS clr_enabled FROM sys.configurations WHERE name = 'clr enabled'",
+      "customMetricThreshold": "Alert when = 1 if CLR is not expected to be enabled in your environment",
+      "migrationNote": "CLR is required for some legitimate features (SSRS, certain 3rd-party tools). Verify before alerting.",
+      "simplificationStrategy": "Consolidate into Configuration Advisory group."
+    },
+
+    {
+      "id": "IDERA-045",
+      "ideraConditionName": "OLE Automation Procedures",
+      "ideraCategory": "Operational",
+      "ideraDefaultSeverity": "Informational",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Advisory",
+      "matchType": "custom",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "customMetricSQL": "SELECT CAST(value_in_use AS INT) AS ole_automation_enabled FROM sys.configurations WHERE name = 'Ole Automation Procedures'",
+      "customMetricThreshold": "Alert when = 1 (should be disabled unless explicitly required)",
+      "migrationNote": "OLE Automation is a security risk — enables COM automation inside SQL Server. Disable if not required. Medium severity because it expands the attack surface.",
+      "simplificationStrategy": "Consolidate into Configuration Advisory group. Raise to Medium given security implications."
+    },
+
+    {
+      "id": "IDERA-046",
+      "ideraConditionName": "SQL Server Agent XPs",
+      "ideraCategory": "Operational",
+      "ideraDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Advisory",
+      "matchType": "custom",
+      "recommendedRgSeverity": "High",
+      "rgColor": "Red",
+      "availableInRG": true,
+      "customMetricSQL": "SELECT CAST(value_in_use AS INT) AS agent_xps_enabled FROM sys.configurations WHERE name = 'Agent XPs'",
+      "customMetricThreshold": "Alert when = 0 (Agent XPs disabled means SQL Server Agent cannot run jobs)",
+      "migrationNote": "Agent XPs being disabled prevents SQL Agent from running any jobs — usually a misconfiguration. High severity because job failure alerts will also stop firing.",
+      "simplificationStrategy": "Consolidate into Configuration Advisory group. High severity — disabling Agent XPs silently breaks job monitoring."
+    },
+
+    {
+      "id": "IDERA-047",
+      "ideraConditionName": "Azure SQL: Avg Data IO / Log Write / Memory / Sessions / Workers / In-Memory Storage",
+      "ideraCategory": "Azure DB",
+      "ideraDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Azure DB",
+      "matchType": "custom",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "customMetricSQL": "SELECT end_time, avg_cpu_percent, avg_data_io_percent, avg_log_write_percent, avg_memory_usage_percent, max_session_percent, max_worker_percent FROM sys.dm_db_resource_stats ORDER BY end_time DESC",
+      "customMetricThreshold": "Alert when any resource % > 80 (Warning) or > 95 (Critical). DTU-based databases are more sensitive to these limits.",
+      "migrationNote": "sys.dm_db_resource_stats is available inside Azure SQL Database and Managed Instance. Redgate Monitor supports Azure SQL monitoring. These metrics CAN be mapped — do not mark as Not Available.",
+      "simplificationStrategy": "Consolidate all six Azure resource metrics into one 'Azure SQL Resource Utilization' custom metric. Query all columns in one pass and alert on the max across dimensions."
+    },
+
+    {
+      "id": "IDERA-048",
+      "ideraConditionName": "Amazon RDS CPU Credit Balance / Credit Usage / Swap Usage",
+      "ideraCategory": "Amazon RDS",
+      "ideraDefaultSeverity": "Warning",
+      "rgAlertTypeId": "NOT AVAILABLE IN REDGATE MONITOR",
+      "rgCategory": "Amazon RDS",
+      "matchType": "none",
+      "recommendedRgSeverity": null,
+      "rgColor": null,
+      "availableInRG": false,
+      "migrationNote": "AWS RDS-specific CloudWatch metrics — not accessible via T-SQL. Redgate Monitor standard edition does not natively monitor Amazon RDS instances.",
+      "simplificationStrategy": "Use AWS CloudWatch Alarms for RDS-specific metrics. Accept this monitoring gap in Redgate Monitor."
+    },
+
+    {
+      "id": "IDERA-049",
+      "ideraConditionName": "Host CPU Usage / Host Memory Swap / Host Memory Usage / Host Power State",
+      "ideraCategory": "Virtualization",
+      "ideraDefaultSeverity": "Warning",
+      "rgAlertTypeId": "NOT AVAILABLE IN REDGATE MONITOR",
+      "rgCategory": "Virtualization",
+      "matchType": "none",
+      "recommendedRgSeverity": null,
+      "rgColor": null,
+      "availableInRG": false,
+      "migrationNote": "VMware/Hyper-V host-level metrics — not accessible via T-SQL. IDERA collects these via VMware SDK / Hyper-V WMI.",
+      "simplificationStrategy": "Use VMware vRealize Operations or Datadog/Zabbix for host-level monitoring. OS-level CPU/memory alerts in RG Monitor provide a proxy for the VM perspective."
+    },
+
+    {
+      "id": "IDERA-050",
+      "ideraConditionName": "VM CPU Ready Wait / VM Host Server Change / VM Memory Swap Delay / VM Power State / VM Reclaimed / VM Resource Configuration / VM Resource Limits",
+      "ideraCategory": "Virtualization",
+      "ideraDefaultSeverity": "Warning",
+      "rgAlertTypeId": "NOT AVAILABLE IN REDGATE MONITOR",
+      "rgCategory": "Virtualization",
+      "matchType": "none",
+      "recommendedRgSeverity": null,
+      "rgColor": null,
+      "availableInRG": false,
+      "migrationNote": "VM hypervisor metrics — require VMware SDK or Hyper-V WMI. Not accessible via T-SQL.",
+      "simplificationStrategy": "VMware vRealize Operations for CPU Ready / memory swap. vCenter event log for VM Host Server Change (vMotion). Accept the gap."
+    },
+
+    {
+      "id": "IDERA-051",
+      "ideraConditionName": "WMI Service Unavailable",
+      "ideraCategory": "Operational",
+      "ideraDefaultSeverity": "Critical",
+      "rgAlertTypeId": "NOT AVAILABLE IN REDGATE MONITOR",
+      "rgCategory": "Operational",
+      "matchType": "none",
+      "recommendedRgSeverity": null,
+      "rgColor": null,
+      "availableInRG": false,
+      "migrationNote": "WMI service health check requires WMI — no T-SQL equivalent.",
+      "simplificationStrategy": "Use OS-level monitoring (PRTG, Datadog agent) to monitor Windows Management Instrumentation service status."
+    },
+
+    {
+      "id": "IDERA-052",
+      "ideraConditionName": "SQLdm Repository Grooming / OS Metrics Collection Status",
+      "ideraCategory": "Operational",
+      "ideraDefaultSeverity": "Warning",
+      "rgAlertTypeId": "NOT AVAILABLE IN REDGATE MONITOR",
+      "rgCategory": "Operational",
+      "matchType": "none",
+      "recommendedRgSeverity": null,
+      "rgColor": null,
+      "availableInRG": false,
+      "migrationNote": "IDERA internal monitoring service health — no equivalent concept in Redgate Monitor.",
+      "simplificationStrategy": "Redgate Monitor has built-in agent health indicators. No equivalent condition required."
+    },
+
+    {
+      "id": "IDERA-053",
+      "ideraConditionName": "Azure Service Tier Changes",
+      "ideraCategory": "Azure DB",
+      "ideraDefaultSeverity": "Informational",
+      "rgAlertTypeId": "NOT AVAILABLE IN REDGATE MONITOR",
+      "rgCategory": "Azure DB",
+      "matchType": "none",
+      "recommendedRgSeverity": null,
+      "rgColor": null,
+      "availableInRG": false,
+      "migrationNote": "Azure platform-level service tier change events are emitted to the Azure Activity Log — not accessible via T-SQL.",
+      "simplificationStrategy": "Use Azure Monitor Alerts on the Azure Activity Log, filtered for 'Microsoft.Sql/servers/databases/write' events."
+    }
+
+  ]
+}
