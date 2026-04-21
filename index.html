@@ -392,6 +392,165 @@
     @page { margin: 18mm 14mm; }
   }
   .print-header { display: none; }
+
+  /* ── Notification group mapping ── */
+  .notif-row {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr auto 1fr auto;
+    gap: 6px;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+  .notif-row input, .notif-row select { margin-bottom: 0; }
+  .notif-arrow { color: var(--text3); font-size: 13px; text-align: center; }
+  .notif-remove {
+    background: none; border: none; color: var(--text3);
+    cursor: pointer; font-size: 16px; padding: 4px; line-height: 1;
+  }
+  .notif-remove:hover { color: var(--red-text); }
+
+  /* ── Visual preview groups ── */
+  .match-group { margin-bottom: 1rem; }
+  .match-group-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px;
+    border-radius: var(--radius);
+    font-size: 12px; font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+    margin-bottom: 6px;
+  }
+  .match-group-header:hover { filter: brightness(0.96); }
+  .match-group-header .mgh-count {
+    font-size: 11px; font-weight: 400;
+    margin-left: auto;
+    opacity: .75;
+  }
+  .match-group-header .mgh-chevron { font-size: 10px; transition: transform .15s; }
+  .match-group-header.collapsed .mgh-chevron { transform: rotate(-90deg); }
+  .mgh-direct  { background: var(--green-bg);  color: var(--green-text);  border: 0.5px solid var(--green-border); }
+  .mgh-partial { background: var(--amber-bg);  color: var(--amber-text);  border: 0.5px solid var(--amber-border); }
+  .mgh-custom  { background: var(--purple-bg); color: var(--purple-text); border: 0.5px solid var(--purple-border); }
+  .mgh-none    { background: var(--red-bg);    color: var(--red-text);    border: 0.5px solid var(--red-border); }
+  .match-group-body { padding: 0 2px; }
+
+  .alert-card {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 10px;
+    padding: 9px 10px;
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 5px;
+    background: var(--bg);
+    align-items: start;
+  }
+  .alert-card:hover { background: var(--bg2); }
+  .alert-card-body { min-width: 0; }
+  .alert-card-name { font-weight: 500; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .alert-card-meta { font-size: 11px; color: var(--text2); margin-top: 2px; }
+  .alert-card-mapping {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    margin-top: 5px;
+  }
+  .mapping-flow {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 11px; color: var(--text2);
+    flex-wrap: wrap;
+  }
+  .mapping-flow strong { color: var(--text); }
+  .mapping-flow .flow-arrow { color: var(--text3); }
+  .cm-btn {
+    font-size: 11px; padding: 2px 9px;
+    border: 0.5px solid var(--purple-border);
+    border-radius: 5px;
+    background: var(--purple-bg); color: var(--purple-text);
+    cursor: pointer; font-family: inherit;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .cm-btn:hover { filter: brightness(0.95); }
+
+  /* ── Custom metric modal ── */
+  .modal-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.45);
+    z-index: 100;
+  }
+  .modal-panel {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    max-height: 82vh;
+    overflow-y: auto;
+    background: var(--bg);
+    border-top: 1px solid var(--border2);
+    border-radius: 14px 14px 0 0;
+    padding: 1.5rem 1.5rem 2rem;
+    z-index: 101;
+    max-width: 860px;
+    margin: 0 auto;
+  }
+  .modal-handle {
+    width: 36px; height: 4px; border-radius: 2px;
+    background: var(--border2);
+    margin: 0 auto 1rem;
+  }
+  .modal-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+  .modal-subtitle { font-size: 12px; color: var(--text2); margin-bottom: 1rem; }
+  .cm-sql-block {
+    background: var(--bg2); border: 0.5px solid var(--border);
+    border-radius: var(--radius);
+    font-family: 'SF Mono','Fira Code','Cascadia Code',monospace;
+    font-size: 11px; padding: 10px 12px;
+    white-space: pre-wrap; word-break: break-all;
+    line-height: 1.6; color: var(--text);
+    margin-bottom: 10px;
+    min-height: 90px;
+    resize: vertical;
+    width: 100%;
+    display: block;
+    border: 0.5px solid var(--border2);
+  }
+  .cm-sql-block:focus { outline: none; border-color: var(--blue-mid); box-shadow: 0 0 0 2px var(--blue-bg); }
+  .cm-thresh-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+
+  /* ── Summary report overlay ── */
+  #summaryOverlay {
+    position: fixed; inset: 0;
+    background: var(--bg);
+    z-index: 200;
+    overflow-y: auto;
+    padding: 2rem 1.5rem 4rem;
+    display: none;
+  }
+  .report-page { max-width: 800px; margin: 0 auto; }
+  .report-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 1rem; }
+  .report-title { font-size: 20px; font-weight: 700; }
+  .report-subtitle { font-size: 12px; color: var(--text2); margin-top: 3px; }
+  .report-close { cursor: pointer; padding: 6px 14px; border: 0.5px solid var(--border2); border-radius: var(--radius); background: var(--bg2); font-size: 12px; color: var(--text2); }
+  .report-close:hover { background: var(--bg3); }
+  .report-section { margin-bottom: 1.5rem; }
+  .report-section-title { font-size: 14px; font-weight: 600; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 0.5px solid var(--border); }
+  .report-summary-box {
+    background: var(--bg2); border-radius: var(--radius-lg);
+    padding: 1rem 1.25rem;
+    font-size: 13px; line-height: 1.8; color: var(--text);
+  }
+  .report-stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin-bottom: 1.25rem; }
+  .report-stat { background: var(--bg2); border-radius: var(--radius); padding: 10px; text-align: center; }
+  .report-stat .n { font-size: 22px; font-weight: 700; }
+  .report-stat .l { font-size: 11px; color: var(--text2); }
+  .gap-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .gap-table th { text-align: left; padding: 6px 10px; background: var(--bg2); border-bottom: 1px solid var(--border); font-weight: 600; }
+  .gap-table td { padding: 7px 10px; border-bottom: 0.5px solid var(--border); vertical-align: top; }
+  .gap-table tr:last-child td { border-bottom: none; }
+  .rpt-mapping-row { display: flex; align-items: center; gap: 6px; padding: 6px 0; border-bottom: 0.5px solid var(--border); font-size: 12px; flex-wrap: wrap; }
+  .rpt-mapping-row:last-child { border-bottom: none; }
+
+  @media print {
+    #summaryOverlay { position: static; overflow: visible; }
+    .report-close, .report-print-btn { display: none !important; }
+    @page { margin: 18mm 14mm; }
+  }
 </style>
 </head>
 <body>
@@ -423,7 +582,6 @@
     <label style="margin-bottom:6px">Source tool</label>
     <div class="source-selector" id="sourceSelector">
       <button class="source-btn active" id="srcSS"    draggable="true" onclick="setSource('sqlsentry')">SQL Sentry</button>
-      <button class="source-btn"        id="srcDpa"   draggable="true" onclick="setSource('dpa')">SolarWinds DPA</button>
       <button class="source-btn"        id="srcIDERA" draggable="true" onclick="setSource('idera')">IDERA</button>
     </div>
   </div>
@@ -461,19 +619,6 @@
         <button class="btn" onclick="loadSample()">Load sample data</button>
         <button class="btn btn-sm" onclick="document.getElementById('rawPaste').value='';alerts=[]">Clear</button>
       </div>
-    </div>
-
-    <!-- DPA how-to -->
-    <div class="card" id="howToDpa">
-      <div class="section-title">How to export alerts from Solarwinds DPA</div>
-      <p style="font-size:12px;color:var(--text2);line-height:1.8">
-        Export your active alerts from DPA's <strong>Alerts &gt; Manage Alerts</strong> view as CSV,
-        or query the DPA repository database and export via SSMS. The tool expects a header row
-        with any of: <code>AlertName</code>, <code>Severity</code>, <code>DatabaseInstance</code>,
-        <code>StartTime</code>, <code>AlertType</code>, <code>Message</code>, <code>Threshold</code>,
-        <code>CurrentValue</code>, <code>Status</code>. Column names are matched flexibly — you can
-        remap anything that doesn't auto-detect in the next step.
-      </p>
     </div>
 
     <!-- IDERA how-to -->
@@ -523,6 +668,14 @@
       </div>
       <div id="mappingUI"></div>
     </div>
+    <!-- Notification group mapping -->
+    <div class="card" id="notifGroupCard">
+      <div class="section-title">Notification group mapping</div>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:14px">Map each SQL Sentry notification / email group to a Redgate Monitor notification action. These are included in the generated PowerShell module as configuration guidance.</p>
+      <div id="notifGroupList"></div>
+      <button class="btn btn-sm" onclick="addNotifGroup()" style="margin-top:4px">+ Add group</button>
+    </div>
+
     <div class="card">
       <div class="section-title">Redgate Monitor connection</div>
       <label>Server URL</label>
@@ -554,7 +707,7 @@
     </div>
     <div class="pdf-btn-row" style="display:flex;gap:10px;align-items:center;margin-bottom:4px">
       <button class="btn btn-primary" onclick="switchTab(3);buildOutputs()">Generate outputs →</button>
-      <button class="btn" onclick="exportPreviewPDF()">Export preview as PDF</button>
+      <button class="btn" onclick="showSummaryReport()">&#128196; Export migration report</button>
     </div>
   </div>
 
@@ -563,7 +716,7 @@
     <div class="card">
       <div class="section-title">Output format</div>
       <div class="output-tabs">
-        <button class="output-tab active" id="oTabPs"   onclick="showOutput('ps')">PowerShell script</button>
+        <button class="output-tab active" id="oTabPs"   onclick="showOutput('ps')">PowerShell module (.psm1)</button>
         <button class="output-tab"        id="oTabJson" onclick="showOutput('json')">Webhook JSON</button>
         <button class="output-tab"        id="oTabSql"  onclick="showOutput('sql')">Annotation SQL</button>
       </div>
@@ -589,15 +742,78 @@
   <footer>
     Alert → Redgate Monitor Converter &nbsp;·&nbsp; Not affiliated with SolarWinds or Redgate &nbsp;·&nbsp;
     <a href="https://documentation.red-gate.com/monitor14" target="_blank" style="color:inherit">Redgate Monitor docs</a> &nbsp;·&nbsp;
-    <a href="https://documentation.solarwinds.com/en/success_center/dpa" target="_blank" style="color:inherit">DPA docs</a> &nbsp;·&nbsp;
     <a href="https://documentation.solarwinds.com/en/success_center/sqlsentry" target="_blank" style="color:inherit">SQL Sentry docs</a>
   </footer>
+</div>
+
+<!-- ── Custom Metric Modal ── -->
+<div id="cmBackdrop" class="modal-backdrop hidden" onclick="closeCmModal()"></div>
+<div id="cmPanel" class="modal-panel hidden">
+  <div class="modal-handle"></div>
+  <div class="modal-title" id="cmTitle">Configure Custom Metric</div>
+  <div class="modal-subtitle">This condition requires a Custom Metric in Redgate Monitor. Edit the details below, then copy the setup snippet for use in <strong>Configuration → Custom metrics and alerts</strong>.</div>
+  <label>Metric name <span style="color:var(--text3);font-weight:400">(as it will appear in Redgate Monitor)</span></label>
+  <input type="text" id="cmName" placeholder="e.g. High VLF Count">
+  <label>Description</label>
+  <input type="text" id="cmDesc" placeholder="What this metric measures and why it matters">
+  <label>T-SQL query <span style="color:var(--text3);font-weight:400">(replace with your own query — must return a single numeric value)</span></label>
+  <textarea class="cm-sql-block" id="cmSQL" rows="7" spellcheck="false"></textarea>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+    <div>
+      <label>Unit</label>
+      <input type="text" id="cmUnit" placeholder="e.g. Count, ms, MB, %">
+    </div>
+    <div>
+      <label>Collection interval</label>
+      <input type="text" id="cmInterval" placeholder="e.g. 5 minutes">
+    </div>
+  </div>
+  <label>Alert thresholds</label>
+  <div class="cm-thresh-row">
+    <div>
+      <label style="color:var(--green-text)">Low (Blue)</label>
+      <input type="text" id="cmLow" placeholder="e.g. 500">
+    </div>
+    <div>
+      <label style="color:var(--amber-text)">Medium (Amber)</label>
+      <input type="text" id="cmMed" placeholder="e.g. 1000">
+    </div>
+    <div>
+      <label style="color:var(--red-text)">High (Red)</label>
+      <input type="text" id="cmHigh" placeholder="e.g. 2000">
+    </div>
+  </div>
+  <div class="btn-group" style="margin-top:1rem">
+    <button class="btn btn-primary" onclick="saveCmDef()">Save definition</button>
+    <button class="btn" onclick="copyCmSnippet()">Copy PS snippet</button>
+    <button class="btn btn-sm" onclick="closeCmModal()">Cancel</button>
+  </div>
+</div>
+
+<!-- ── Summary Report Overlay ── -->
+<div id="summaryOverlay">
+  <div class="report-page">
+    <div class="report-header">
+      <div>
+        <div class="report-title">Migration Report</div>
+        <div class="report-subtitle" id="rptSubtitle"></div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="report-close report-print-btn btn btn-primary" onclick="window.print()">&#128438; Print / Save PDF</button>
+        <button class="report-close" onclick="closeSummaryReport()">&#10005; Close</button>
+      </div>
+    </div>
+    <div id="rptBody"></div>
+  </div>
 </div>
 
 <script>
 // ── State ──────────────────────────────────────────────────────────────────
 let alerts = [], colHeaders = [], mappings = {}, outputMode = 'ps', sourceMode = 'sqlsentry';
-let previewSort = { col: 'startTime', dir: -1 }; // col: field name, dir: 1=asc, -1=desc
+let previewSort = { col: 'startTime', dir: -1 };
+let notifGroups = []; // [{ssGroup, rgAction, rgTarget}]
+let cmDefs = {};      // keyed by rgType+alertName — user-edited custom metric definitions
+let cmCurrent = null; // alert being configured in modal
 
 // ── DPA Alert type mapping ─────────────────────────────────────────────────
 const DPA_TYPE_MAP = [
@@ -933,32 +1149,30 @@ const RG_FIELDS = {
 // ── Source switching ───────────────────────────────────────────────────────
 function setSource(mode) {
   sourceMode = mode;
-  document.getElementById('srcDpa').classList.toggle('active',   mode === 'dpa');
   document.getElementById('srcSS').classList.toggle('active',    mode === 'sqlsentry');
   document.getElementById('srcIDERA').classList.toggle('active', mode === 'idera');
-  const titles   = { dpa: 'DPA → Redgate Monitor', sqlsentry: 'SQL Sentry → Redgate Monitor', idera: 'IDERA → Redgate Monitor' };
-  const descs    = {
-    dpa:       'Convert SolarWinds DPA alert exports into Redgate Monitor–ready PowerShell scripts, webhook JSON, or SQL — with full alert type mapping applied automatically.',
-    sqlsentry: 'Convert SolarWinds SQL Sentry alert exports into Redgate Monitor–ready PowerShell scripts, webhook JSON, or SQL — with full SQL Sentry alert type mapping applied automatically.',
-    idera:     'Convert IDERA SQL Diagnostic Manager alert exports into Redgate Monitor–ready PowerShell scripts, webhook JSON, or SQL — with full SQLdm alert type mapping applied automatically.'
+  const titles = {
+    sqlsentry: 'SQL Sentry → Redgate Monitor',
+    idera:     'IDERA → Redgate Monitor'
   };
-  const cardTitles = { dpa: 'Import DPA alert export', sqlsentry: 'Import SQL Sentry alert export', idera: 'Import IDERA alert export' };
+  const descs = {
+    sqlsentry: 'Convert SolarWinds SQL Sentry alert exports into Redgate Monitor–ready PowerShell modules, webhook JSON, or SQL — with full alert type mapping, gap analysis, and notification group migration.',
+    idera:     'Convert IDERA SQL Diagnostic Manager alert exports into Redgate Monitor–ready PowerShell modules, webhook JSON, or SQL — with full SQLdm alert type mapping applied automatically.'
+  };
+  const cardTitles = { sqlsentry: 'Import SQL Sentry alert export', idera: 'Import IDERA alert export' };
   const dropLabels = {
-    dpa:       'Drop a DPA CSV or ZIP here, or click to browse',
     sqlsentry: 'Drop SQL Sentry .condition files, a ZIP, or a CSV here, or click to browse',
     idera:     'Drop an IDERA CSV or ZIP here, or click to browse'
   };
   const mapSubs = {
-    dpa:       'DPA column → Redgate Monitor field. Auto-matched where column names align — override any below.',
     sqlsentry: 'SQL Sentry column → Redgate Monitor field. Auto-matched where column names align — override any below.',
     idera:     'IDERA column → Redgate Monitor field. Auto-matched where column names align — override any below.'
   };
-  document.getElementById('heroTitle').textContent       = titles[mode]    || titles.dpa;
-  document.getElementById('heroDesc').textContent        = descs[mode]     || descs.dpa;
-  document.getElementById('importCardTitle').textContent = cardTitles[mode]|| cardTitles.dpa;
-  document.getElementById('dropLabel').textContent       = dropLabels[mode]|| dropLabels.dpa;
-  document.getElementById('mapSubtitle').textContent     = mapSubs[mode]   || mapSubs.dpa;
-  document.getElementById('howToDpa').classList.toggle('hidden',   mode !== 'dpa');
+  document.getElementById('heroTitle').textContent       = titles[mode]     || titles.sqlsentry;
+  document.getElementById('heroDesc').textContent        = descs[mode]      || descs.sqlsentry;
+  document.getElementById('importCardTitle').textContent = cardTitles[mode] || cardTitles.sqlsentry;
+  document.getElementById('dropLabel').textContent       = dropLabels[mode] || dropLabels.sqlsentry;
+  document.getElementById('mapSubtitle').textContent     = mapSubs[mode]    || mapSubs.sqlsentry;
   document.getElementById('howToIDERA').classList.toggle('hidden', mode !== 'idera');
   document.getElementById('howToSS').classList.toggle('hidden',    mode !== 'sqlsentry');
 }
@@ -1053,10 +1267,7 @@ function finalizeConditionImport(allAlerts, summary) {
   const hasConditions = summary.some(s => s.fmt === 'ss-condition');
   const ssCount    = summary.filter(s => s.fmt.startsWith('ss')).length;
   const ideraCount = summary.filter(s => s.fmt === 'idera').length;
-  sourceMode = ssCount >= Math.ceil(summary.length / 2) ? 'sqlsentry'
-             : ideraCount >= Math.ceil(summary.length / 2) ? 'idera'
-             : 'dpa';
-  document.getElementById('srcDpa').classList.toggle('active',   sourceMode === 'dpa');
+  sourceMode = ssCount >= Math.ceil(summary.length / 2) ? 'sqlsentry' : 'idera';
   document.getElementById('srcSS').classList.toggle('active',    sourceMode === 'sqlsentry');
   document.getElementById('srcIDERA').classList.toggle('active', sourceMode === 'idera');
 
@@ -1088,7 +1299,7 @@ function detectFormat(text) {
   const h = text.trim().split('\n')[0].toLowerCase();
   if (h.includes('target') || h.includes('condition type') || h.includes('ack')) return 'ss-csv';
   if (h.includes('sqldm') || h.includes('sqld') || (h.includes('category') && h.includes('sqlserver')) || (h.includes('alert') && h.includes('current value') && h.includes('category'))) return 'idera';
-  return 'dpa';
+  return 'ss-csv';
 }
 
 // Normalize a standard CSV (DPA or SQL Sentry alert log) into RG-keyed objects
@@ -1241,21 +1452,8 @@ function inferConditionAlertType(areas, tags, name) {
 
 // ── Sample data ────────────────────────────────────────────────────────────
 function loadSample() {
-  if (sourceMode === 'sqlsentry') { loadSampleSS(); return; }
-  if (sourceMode === 'idera')     { loadSampleIDERA(); return; }
-  document.getElementById('rawPaste').value =
-`AlertName,Severity,DatabaseInstance,StartTime,EndTime,AlertType,Message,Threshold,CurrentValue,Status
-High CPU Wait,High,PROD-SQL-01,2026-04-01 08:12:00,2026-04-01 08:45:00,Resources,CPU wait time exceeded threshold,80,94,Ended
-Blocking Session Detected,High,PROD-SQL-01,2026-04-01 09:03:00,,Administrative,Blocking detected — session 57 blocked by 23,1,3,Active
-Slow Query Wait,Medium,PROD-SQL-02,2026-04-01 07:55:00,2026-04-01 08:10:00,Wait Time,SQL statement wait time exceeded threshold,5000,8240,Ended
-tempdb Contention,Medium,DEV-SQL-01,2026-03-31 22:10:00,2026-03-31 22:18:00,Wait Time,High wait time on tempdb contention,2000,4450,Ended
-Disk Space Low,High,PROD-SQL-01,2026-04-01 10:00:00,,Administrative,Disk C:\\ at 91% capacity,90,91,Active
-Job Failure,Low,PROD-SQL-02,2026-04-01 06:00:00,2026-04-01 06:01:00,Administrative,SQL Agent job NightlyBackup failed,1,0,Ended
-Memory Pressure,Medium,PROD-SQL-01,2026-04-01 11:30:00,,Resources,Available memory below threshold,512,210,Active
-Deadlock Detected,High,PROD-SQL-01,2026-04-01 12:05:00,2026-04-01 12:05:01,Administrative,Deadlock detected between sessions 44 and 67,1,1,Ended
-Backup Overdue,High,PROD-SQL-02,2026-04-01 13:00:00,,Administrative,Last backup older than 24 hours,24,36,Active
-Wait Time Anomaly,Medium,PROD-SQL-01,2026-04-01 14:00:00,2026-04-01 14:20:00,Wait Time,Wait time anomaly detected — ML baseline exceeded,0,3.8,Ended`;
-  parseCSV();
+  if (sourceMode === 'idera') { loadSampleIDERA(); return; }
+  loadSampleSS();
 }
 
 function loadSampleSS() {
@@ -1419,42 +1617,13 @@ function updateSortButtons() {
   });
 }
 
-function renderAlertList(mapped) {
-  const sorted = sortMapped(mapped);
-  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'idera' ? 'IDERA' : 'DPA';
-  const rows = sorted.map(a => {
-    const r = resolveRgType(a.alertType, a.alertName, a.message);
-    const sev = a.severity.toLowerCase();
-    const sevClass = sev==='high'?'badge-high':sev==='medium'?'badge-med':'badge-low';
-    const mClass = r.match==='direct'?'badge-direct':r.match==='partial'?'badge-partial':r.match==='none'?'badge-none':'badge-custom';
-    const noteHtml = r.match!=='direct' ? `<span class="note-pill">${esc(r.note)}</span>` : '';
-    return `<div class="alert-item">
-      <div class="alert-top">
-        <input type="checkbox" ${a._excluded?'':'checked'} style="margin-top:3px" onchange="alerts[${a._id}]._excluded=!this.checked">
-        <div>
-          <div class="alert-name">${esc(a.alertName||'(unnamed)')}</div>
-          <div class="alert-meta">${esc(a.instance||'—')} &middot; ${esc(a.startTime||'—')}</div>
-        </div>
-        <span class="badge ${sevClass}">${esc(a.severity||'—')}</span>
-      </div>
-      <div class="alert-mapping">
-        <span style="font-size:11px;color:var(--text2)">${srcLabel}: <strong>${esc(a.alertType||'—')}</strong></span>
-        <span style="color:var(--text3);font-size:11px">→</span>
-        <span class="mapping-tag">RG: ${esc(r.rgType)}</span>
-        <span class="badge ${mClass}">${r.match}</span>
-        ${noteHtml}
-      </div>
-    </div>`;
-  }).join('');
-  document.getElementById('alertList').innerHTML = rows || '<p style="color:var(--text2);font-size:13px">No alerts parsed yet.</p>';
-}
 
 function buildPreview() {
   const mapped = getMapped();
   const high = mapped.filter(a => a.severity.toLowerCase() === 'high').length;
   const med  = mapped.filter(a => a.severity.toLowerCase() === 'medium').length;
   const low  = mapped.filter(a => ['low','info'].includes(a.severity.toLowerCase())).length;
-  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'idera' ? 'IDERA' : 'DPA';
+  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : 'IDERA';
 
   document.getElementById('statsBar').innerHTML = `
     <div class="stat-card"><div class="stat-n">${mapped.length}</div><div class="stat-l">Total alerts</div></div>
@@ -1463,16 +1632,13 @@ function buildPreview() {
     <div class="stat-card"><div class="stat-n" style="color:var(--green-text)">${low}</div><div class="stat-l">Low</div></div>`;
 
   document.getElementById('printHeader').textContent =
-    `${srcLabel} → Redgate Monitor · Alert preview · ${mapped.length} alerts · ${new Date().toLocaleDateString()}`;
+    `${srcLabel} → Redgate Monitor · ${mapped.length} conditions · ${new Date().toLocaleDateString()}`;
 
   renderAlertList(mapped);
   updateSortButtons();
   switchTab(2);
 }
 
-function exportPreviewPDF() {
-  window.print();
-}
 
 function getMapped() {
   return alerts.map(a => {
@@ -1488,102 +1654,238 @@ function buildOutputs() {
   const url  = document.getElementById('rgUrl').value.trim()     || 'http://your-redgate-server:8080';
   const tok  = document.getElementById('rgToken').value.trim()   || 'YOUR_AUTH_TOKEN';
   const inst = document.getElementById('rgInstance').value.trim()|| 'YOUR_SQL_INSTANCE';
-  window._psOut   = buildPS(inc, url, tok, inst);
+  window._psOut   = buildModule(inc, url, tok, inst);
   window._jsonOut = buildJSON(inc);
   window._sqlOut  = buildSQL(inc);
   showOutput('ps');
 }
 
-function buildPS(list, url, tok, inst) {
-  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'idera' ? 'IDERA' : 'DPA';
-  const srcSlug  = sourceMode === 'sqlsentry' ? 'sqlsentry' : sourceMode === 'idera' ? 'idera' : 'dpa';
+function buildModule(list, url, tok, inst) {
+  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : 'IDERA';
   const byInst = {};
   list.forEach(a => { const k = a.instance||inst; (byInst[k]=byInst[k]||[]).push(a); });
   const customNeeded = [];
   const notAvailable = [];
-
-  let s = `# ${srcLabel} → Redgate Monitor: Annotation import script
-# Generated: ${new Date().toISOString()}
-# Source:    ${srcLabel}
-# Alerts:    ${list.length}
-#`;
-  if (sourceMode === 'sqlsentry') {
-    s += `
-# Type mappings applied (SQL Sentry → Redgate Monitor):
-#   General/CPU            → Processor (CPU) utilization
-#   General/Memory         → OS memory available
-#   General/Disk Space     → Disk space
-#   General/Disk I/O       → Disk space / avg read-write time
-#   General/Blocking       → Blocking processes
-#   General/Deadlock       → Deadlock (Extended Events)
-#   General/Backup         → Backup overdue
-#   General/Job Failure    → Job failing
-#   General/Unavailable    → SQL Server unavailable
-#   General/AG/Cluster     → AG / Cluster failover
-#   General/Long Running   → Long running query
-#   Advisory               → Dynamic alerts / Custom metric
-#   Audit                  → SQL Server log entry
-#   Failsafe               → SQL Server unavailable
-#
-# NOTE: Alerts marked [CUSTOM METRIC REQUIRED] need a custom metric created
-# in Redgate Monitor (Configuration > Custom metrics and alerts) beforehand.
-`;
-  } else {
-    s += `
-# Type mappings applied:
-#   DPA "Wait Time"      → Long running query / Dynamic alerts - Waits / custom metric
-#   DPA "Resources"      → CPU utilization / OS memory / Disk space / Network utilization
-#   DPA "Administrative" → Blocking / Deadlock / Backup overdue / Job failing / SQL Server unavailable
-#   DPA "Custom"         → Custom metric + alert
-#
-# NOTE: Alerts marked [CUSTOM METRIC REQUIRED] need a custom metric created
-# in Redgate Monitor (Configuration > Custom metrics and alerts) beforehand.
-`;
-  }
-  s += `
-Import-Module .\\RedgateSQM
-\$ErrorActionPreference = 'Stop'
-
-Connect-SqlMonitor \`
-  -ServerUrl '${url}' \`
-  -AuthToken  '${tok}'
-
-# Resolve monitored instances
-\$defaultInstance = Get-RedgateMonitorMonitoredObject \`
-  -Type SqlServerInstance -Name '${inst}'
-`;
-  for (const iName of Object.keys(byInst)) {
-    if (iName && iName !== inst)
-      s += `\$inst_${san(iName)} = Get-RedgateMonitorMonitoredObject -Type SqlServerInstance -Name '${iName}'\n`;
-  }
-
-  s += `\n# Annotations\n`;
   list.forEach(a => {
     const r = resolveRgType(a.alertType, a.alertName, a.message);
-    const tgt = (a.instance && a.instance !== inst) ? `\$inst_${san(a.instance)}` : '\$defaultInstance';
-    const dt  = a.startTime ? `[datetime]::Parse('${toISO(a.startTime)}').ToUniversalTime()` : `[datetime]::UtcNow`;
-    const desc = `[${srcLabel} ${a.severity}][${r.rgCat} > ${r.rgType}] ${a.alertName}${a.message?' — '+a.message.slice(0,100):''}${a.threshold?' | Threshold: '+a.threshold:''}${a.currentValue?' | Value: '+a.currentValue:''}`;
-    if (r.match === 'custom') customNeeded.push(r.rgType);
-    if (r.match === 'none') notAvailable.push(`${a.alertName} — ${r.note}`);
-    const matchLabel = r.match==='custom'?' [CUSTOM METRIC REQUIRED]':r.match==='none'?' [NOT AVAILABLE IN REDGATE MONITOR]':'';
-    s += `\n# ${srcLabel}: ${a.alertType||'—'} → RG: ${r.rgType} [${r.match}]${matchLabel}\nAdd-RedgateMonitorAnnotation \`\n  -Target      ${tgt} \`\n  -Description '${esc2(desc)}' \`\n  -UtcDate     ${dt} \`\n  -Source      '${r.source}'\n`;
+    if (r.match === 'custom')  customNeeded.push({ type: r.rgType, note: r.note, alert: a });
+    if (r.match === 'none')    notAvailable.push(`${a.alertName} — ${r.note}`);
   });
+  const uniqueCustom = [...new Map(customNeeded.map(c => [c.type, c])).values()];
 
-  if (customNeeded.length) {
-    const u = [...new Set(customNeeded)];
-    s += `\n# Custom metrics to build manually in Redgate Monitor:\n`;
-    u.forEach(t => s += `#   > ${t}\n`);
-    s += `# Go to: Configuration > Custom metrics and alerts > Add custom metric\n`;
-  }
-  if (notAvailable.length) {
-    s += `\n# !! NOT AVAILABLE IN REDGATE MONITOR — the following conditions have no equivalent:\n`;
-    [...new Set(notAvailable)].forEach(t => s += `#   > ${t}\n`);
-  }
-  return s;
+  // ── Notification guide ───────────────────────────────────────────────────
+  const notifLines = notifGroups.filter(g => g.ssGroup).map(g =>
+    `#   SS group "${g.ssGroup}" → RG ${g.rgAction}${g.rgTarget ? ' : ' + g.rgTarget : ''}`
+  ).join('\n');
+
+  // ── Custom metric stubs ──────────────────────────────────────────────────
+  const cmStubs = uniqueCustom.map((c, i) => {
+    const key = (c.type + '|' + c.alert.alertName).toLowerCase();
+    const def = cmDefs[key] || {};
+    const name = def.name || c.alert.alertName || c.type;
+    const sql  = def.sql  || extractSQLFromNote(c.note) || '-- TODO: add T-SQL query here';
+    const unit = def.unit || 'Count';
+    const low  = def.low  || '?'; const med = def.med || '?'; const high = def.high || '?';
+    return `# [${i+1}] ${name}
+#     Unit       : ${unit}
+#     Thresholds : Low=${low} | Medium=${med} | High=${high}
+#     T-SQL      :
+${sql.split('\n').map(l => '#       ' + l).join('\n')}`;
+  }).join('\n#\n');
+
+  // ── Alert data array ─────────────────────────────────────────────────────
+  const alertData = list.map(a => {
+    const r = resolveRgType(a.alertType, a.alertName, a.message);
+    return `    [pscustomobject]@{ AlertName=${pq(a.alertName)}; Severity=${pq(a.severity)}; Instance=${pq(a.instance||inst)}; StartTime=${pq(a.startTime)}; RgAlertType=${pq(r.rgType)}; RgCategory=${pq(r.rgCat)}; MatchType=${pq(r.match)}; Source=${pq(r.source)}; Message=${pq((a.message||'').slice(0,120))} }`;
+  }).join(',\n');
+
+  return `#Requires -Version 5.1
+<#
+.SYNOPSIS
+    Import ${srcLabel} conditions into Redgate Monitor
+.DESCRIPTION
+    Generated by Alert Converter on ${new Date().toISOString().slice(0,10)}.
+    Supports -WhatIf (dry-run), transcript logging, and CSV rollback log.
+
+.EXAMPLE
+    # Dry run — shows every operation without making changes:
+    Import-Module .\\Import-AlertsToRedgateMonitor.psm1
+    Import-AlertsToRedgateMonitor -WhatIf -Verbose
+
+.EXAMPLE
+    # Live run:
+    Import-AlertsToRedgateMonitor
+
+.EXAMPLE
+    # Live run with automatic rollback on first error:
+    Import-AlertsToRedgateMonitor -RollbackOnError
+
+.NOTES
+    SIGNING (run once, then re-sign after any edit):
+        \\$cert = New-SelfSignedCertificate -Subject 'CN=AlertConverter' \`
+                    -CertStoreLocation 'Cert:\\CurrentUser\\My' -Type CodeSigningCert
+        Set-AuthenticodeSignature -FilePath .\\Import-AlertsToRedgateMonitor.psm1 -Certificate \\$cert
+
+    REDGATE MODULE:
+        Download RedgateSQM.psm1 from your Redgate Monitor portal:
+        Configuration → PowerShell API → Download module
+#>
+
+Set-StrictMode -Version Latest
+
+# ── Notification group mapping ────────────────────────────────────────────
+# Configure in Redgate Monitor: Configuration > Notification profiles
+# Then assign each profile to the relevant alert type in Alert Settings.
+${notifLines || '# (No notification groups mapped — add them in step 2 of the converter)'}
+
+# ── Custom metrics to create before running ───────────────────────────────
+# Go to: Configuration > Custom metrics and alerts > Add custom metric
+# For each item below, create a metric with the specified T-SQL and thresholds.
+#
+${cmStubs || '# (No custom metric conditions in this export)'}
+
+# ── Embedded alert data ───────────────────────────────────────────────────
+\\$script:AlertData = @(
+${alertData}
+)
+
+# ── Functions ─────────────────────────────────────────────────────────────
+function Import-AlertsToRedgateMonitor {
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact='Medium')]
+    param(
+        [string]\\$ServerUrl       = '${url}',
+        [string]\\$AuthToken       = '${tok}',
+        [string]\\$DefaultInstance = '${inst}',
+        [switch]\\$RollbackOnError,
+        [string]\\$LogPath         = "\\$PSScriptRoot\\rg_import_logs"
+    )
+
+    \\$Timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
+    if (-not (Test-Path \\$LogPath)) { \\$null = New-Item \\$LogPath -ItemType Directory }
+
+    \\$TranscriptPath = "\\$LogPath\\import_\\$Timestamp.txt"
+    Start-Transcript -Path \\$TranscriptPath -Append | Out-Null
+    Write-Host "[$(Get-Date -f HH:mm:ss)] Log: \\$TranscriptPath" -ForegroundColor DarkGray
+
+    \\$RollbackLog = [System.Collections.Generic.List[pscustomobject]]::new()
+    \\$Stats = @{ Added = 0; WhatIf = 0; Failed = 0 }
+
+    try {
+        Write-Host "[$(Get-Date -f HH:mm:ss)] Connecting → \\$ServerUrl" -ForegroundColor Cyan
+        if (\\$PSCmdlet.ShouldProcess(\\$ServerUrl, 'Connect-SqlMonitor')) {
+            Import-Module .\\RedgateSQM -ErrorAction Stop
+            Connect-SqlMonitor -ServerUrl \\$ServerUrl -AuthToken \\$AuthToken
+        }
+
+        \\$InstanceCache = @{}
+
+        foreach (\\$Alert in \\$script:AlertData) {
+            if (\\$Alert.MatchType -eq 'none') {
+                Write-Warning "Skipping '$($Alert.AlertName)' — no Redgate Monitor equivalent."
+                continue
+            }
+
+            \\$InstName = if (\\$Alert.Instance) { \\$Alert.Instance } else { \\$DefaultInstance }
+
+            if (-not \\$InstanceCache.ContainsKey(\\$InstName)) {
+                if (\\$PSCmdlet.ShouldProcess(\\$InstName, 'Resolve monitored object')) {
+                    \\$InstanceCache[\\$InstName] = Get-RedgateMonitorMonitoredObject \`
+                        -Type SqlServerInstance -Name \\$InstName
+                }
+            }
+
+            \\$Target  = \\$InstanceCache[\\$InstName]
+            \\$UtcDate = if (\\$Alert.StartTime) {
+                [datetime]::Parse(\\$Alert.StartTime).ToUniversalTime()
+            } else { [datetime]::UtcNow }
+
+            \\$Desc = "[$($Alert.Severity)][$($Alert.RgCategory) > $($Alert.RgAlertType)] $($Alert.AlertName)"
+            if (\\$Alert.Message) { \\$Desc += " — $($Alert.Message)" }
+            if (\\$Alert.MatchType -eq 'custom') { \\$Desc += ' [CUSTOM METRIC REQUIRED]' }
+
+            \\$OpDesc = "Add annotation '$($Alert.AlertName)' on \\$InstName"
+
+            if (\\$PSCmdlet.ShouldProcess(\\$OpDesc, 'Add-RedgateMonitorAnnotation')) {
+                try {
+                    \\$Result = Add-RedgateMonitorAnnotation \`
+                        -Target      \\$Target \`
+                        -Description \\$Desc \`
+                        -UtcDate     \\$UtcDate \`
+                        -Source      \\$Alert.Source
+
+                    \\$null = \\$RollbackLog.Add([pscustomobject]@{
+                        Seq          = \\$RollbackLog.Count + 1
+                        Action       = 'Add-Annotation'
+                        AnnotationId = \\$Result.Id
+                        AlertName    = \\$Alert.AlertName
+                        Instance     = \\$InstName
+                        AddedAt      = (Get-Date -Format o)
+                        Severity     = \\$Alert.Severity
+                        RgAlertType  = \\$Alert.RgAlertType
+                        MatchType    = \\$Alert.MatchType
+                    })
+                    \\$Stats.Added++
+                    Write-Verbose "  + $($Alert.AlertName)"
+                } catch {
+                    \\$Stats.Failed++
+                    Write-Warning "  FAIL '$($Alert.AlertName)': \\$_"
+                    if (\\$RollbackOnError) {
+                        Write-Warning "RollbackOnError: rolling back \\$($RollbackLog.Count) annotation(s)."
+                        Invoke-AlertRollback -Log \\$RollbackLog
+                        break
+                    }
+                }
+            } else {
+                \\$Stats.WhatIf++
+            }
+        }
+
+    } finally {
+        if (\\$RollbackLog.Count -gt 0) {
+            \\$RollbackPath = "\\$LogPath\\rollback_\\$Timestamp.csv"
+            \\$RollbackLog | Export-Csv -Path \\$RollbackPath -NoTypeInformation
+            Write-Host "[$(Get-Date -f HH:mm:ss)] Rollback log → \\$RollbackPath" -ForegroundColor Green
+        }
+        Write-Host ''
+        Write-Host '─── Import summary ──────────────────' -ForegroundColor Cyan
+        Write-Host "  Added  : \\$($Stats.Added)"  -ForegroundColor Green
+        if (\\$Stats.WhatIf -gt 0) {
+            Write-Host "  WhatIf : \\$($Stats.WhatIf)" -ForegroundColor Yellow
+        }
+        Write-Host "  Failed : \\$($Stats.Failed)" -ForegroundColor $(if (\\$Stats.Failed -gt 0) { 'Red' } else { 'DarkGray' })
+        Write-Host '─────────────────────────────────────'
+        Stop-Transcript | Out-Null
+    }
+}
+
+function Invoke-AlertRollback {
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact='High')]
+    param(
+        [Parameter(Mandatory)]
+        [System.Collections.Generic.List[pscustomobject]]\\$Log
+    )
+    Write-Warning "Rolling back \\$($Log.Count) annotation(s) in reverse order..."
+    \\$Log | Sort-Object Seq -Descending | ForEach-Object {
+        if (\\$_.Action -eq 'Add-Annotation') {
+            if (\\$PSCmdlet.ShouldProcess("Annotation \\$($_.AnnotationId) [\\$($_.AlertName)]", 'Remove')) {
+                try {
+                    Remove-RedgateMonitorAnnotation -Id \\$_.AnnotationId
+                    Write-Host "  Rolled back: \\$($_.AlertName)" -ForegroundColor Yellow
+                } catch {
+                    Write-Warning "  Could not roll back '\\$($_.AlertName)': \\$_"
+                }
+            }
+        }
+    }
+    Write-Host 'Rollback complete.'
+}
+
+Export-ModuleMember -Function Import-AlertsToRedgateMonitor, Invoke-AlertRollback
+`;
 }
 
 function buildJSON(list) {
-  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'idera' ? 'IDERA' : 'SolarWinds DPA';
+  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : 'IDERA';
   return JSON.stringify(list.map(a => {
     const r = resolveRgType(a.alertType, a.alertName, a.message);
     return {
@@ -1598,8 +1900,8 @@ function buildJSON(list) {
 }
 
 function buildSQL(list) {
-  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'idera' ? 'IDERA' : 'DPA';
-  const tblName  = sourceMode === 'sqlsentry' ? 'SSAlertImport' : sourceMode === 'idera' ? 'IDERAAlertImport' : 'DPAAlertImport';
+  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : 'IDERA';
+  const tblName  = sourceMode === 'sqlsentry' ? 'SSAlertImport' : 'IDERAAlertImport';
   let s = `-- ${srcLabel} Alert Annotations — staging table with RG type mapping
 -- Generated: ${new Date().toISOString()}
 
@@ -1637,9 +1939,9 @@ function showOutput(mode) {
     const id = 'oTab' + m.charAt(0).toUpperCase() + m.slice(1);
     document.getElementById(id).classList.toggle('active', m === mode);
   });
-  const src = sourceMode === 'sqlsentry' ? 'SQL Sentry' : 'DPA';
+  const src = sourceMode === 'sqlsentry' ? 'SQL Sentry' : 'IDERA';
   const notes = {
-    ps:   `Run this .ps1 with the Redgate Monitor PowerShell module. Each ${src} alert is annotated with its mapped RG type. Alerts flagged [CUSTOM METRIC REQUIRED] need a custom metric built in Redgate Monitor first.`,
+    ps:   `Signed PowerShell module (.psm1) with WhatIf, transcript logging, and rollback log. Import-Module then call Import-AlertsToRedgateMonitor. Use -WhatIf for a dry run. Alerts marked [CUSTOM METRIC REQUIRED] need a custom metric built in Redgate Monitor first (Configuration → Custom metrics and alerts).`,
     json: `POST this JSON to a webhook or routing layer. Each record carries both the ${src} category and the resolved Redgate Monitor alert type for downstream logic.`,
     sql:  `Creates a staging table with full type mapping columns. The query at the bottom lists which alert types need custom metrics built in Redgate Monitor.`
   };
@@ -1653,8 +1955,8 @@ function copyOutput() {
     .then(() => { const b = event.target; b.textContent = 'Copied!'; setTimeout(() => b.textContent = 'Copy to clipboard', 1800); });
 }
 function downloadOutput() {
-  const ext  = outputMode==='ps'?'.ps1':outputMode==='json'?'.json':'.sql';
-  const slug = sourceMode === 'sqlsentry' ? 'sqlsentry_to_redgate' : 'dpa_to_redgate';
+  const ext  = outputMode==='ps'?'.psm1':outputMode==='json'?'.json':'.sql';
+  const slug = sourceMode === 'sqlsentry' ? 'Import-SSAlerts' : 'Import-IDERAAlerts';
   const a = document.createElement('a');
   a.href = 'data:text/plain;charset=utf-8,' + encodeURIComponent(document.getElementById('outputBlock').textContent);
   a.download = slug + ext; a.click();
@@ -1685,6 +1987,8 @@ function toggleTheme() {
 
 // Init default source (SQL Sentry)
 setSource('sqlsentry');
+// Init notification groups with one blank row
+addNotifGroup();
 
 // ── Draggable source tabs ──────────────────────────────────────────────────
 (function() {
@@ -1729,16 +2033,338 @@ setSource('sqlsentry');
   });
 })();
 
+// ── Notification group mapping ─────────────────────────────────────────────
+const RG_NOTIF_ACTIONS = ['Email','Microsoft Teams','Slack','PagerDuty','Webhook','OpsGenie','Custom'];
+
+function renderNotifGroups() {
+  const rows = notifGroups.map((g, i) => `
+    <div class="notif-row" id="ng-${i}">
+      <input type="text" placeholder="SQL Sentry group / email list name"
+        value="${esc(g.ssGroup)}"
+        oninput="notifGroups[${i}].ssGroup=this.value"
+        style="margin-bottom:0">
+      <span class="notif-arrow">→</span>
+      <select onchange="notifGroups[${i}].rgAction=this.value" style="margin-bottom:0">
+        ${RG_NOTIF_ACTIONS.map(a => `<option ${g.rgAction===a?'selected':''}>${a}</option>`).join('')}
+      </select>
+      <span class="notif-arrow">·</span>
+      <input type="text" placeholder="Email / webhook / key"
+        value="${esc(g.rgTarget)}"
+        oninput="notifGroups[${i}].rgTarget=this.value"
+        style="margin-bottom:0">
+      <button class="notif-remove" onclick="removeNotifGroup(${i})">&#215;</button>
+    </div>`).join('');
+  document.getElementById('notifGroupList').innerHTML = rows ||
+    '<p style="font-size:12px;color:var(--text3);margin-bottom:8px">No groups added yet.</p>';
+}
+
+function addNotifGroup() {
+  notifGroups.push({ ssGroup: '', rgAction: 'Email', rgTarget: '' });
+  renderNotifGroups();
+}
+
+function removeNotifGroup(i) {
+  notifGroups.splice(i, 1);
+  renderNotifGroups();
+}
+
+// ── Custom metric modal ────────────────────────────────────────────────────
+// Extract T-SQL embedded in an SS_TYPE_MAP note string
+function extractSQLFromNote(note) {
+  const m = (note || '').match(/SELECT[\s\S]+?(?=\s*—|\s*alert when|\s*$)/i);
+  if (m) return m[0].trim().replace(/ {2,}/g, '\n  ');
+  return '';
+}
+
+function openCmModal(alert) {
+  const r = resolveRgType(alert.alertType, alert.alertName, alert.message);
+  const key = (r.rgType + '|' + alert.alertName).toLowerCase();
+  cmCurrent = { key, alert, r };
+
+  const saved = cmDefs[key] || {};
+  document.getElementById('cmTitle').textContent = 'Configure Custom Metric — ' + (alert.alertName || r.rgType);
+  document.getElementById('cmName').value    = saved.name    || alert.alertName || r.rgType;
+  document.getElementById('cmDesc').value    = saved.desc    || r.note.split('—')[0].trim().replace(/^SELECT.+/i,'').trim() || '';
+  document.getElementById('cmSQL').value     = saved.sql     || extractSQLFromNote(r.note) || '-- Paste your T-SQL query here\n-- Must return a single numeric value\nSELECT 0 AS metric_value';
+  document.getElementById('cmUnit').value    = saved.unit    || 'Count';
+  document.getElementById('cmInterval').value= saved.interval|| '5 minutes';
+  document.getElementById('cmLow').value     = saved.low     || '';
+  document.getElementById('cmMed').value     = saved.med     || '';
+  document.getElementById('cmHigh').value    = saved.high    || '';
+
+  document.getElementById('cmBackdrop').classList.remove('hidden');
+  document.getElementById('cmPanel').classList.remove('hidden');
+  document.getElementById('cmPanel').scrollTop = 0;
+}
+
+function closeCmModal() {
+  document.getElementById('cmBackdrop').classList.add('hidden');
+  document.getElementById('cmPanel').classList.add('hidden');
+  cmCurrent = null;
+}
+
+function saveCmDef() {
+  if (!cmCurrent) return;
+  cmDefs[cmCurrent.key] = {
+    name:     document.getElementById('cmName').value,
+    desc:     document.getElementById('cmDesc').value,
+    sql:      document.getElementById('cmSQL').value,
+    unit:     document.getElementById('cmUnit').value,
+    interval: document.getElementById('cmInterval').value,
+    low:      document.getElementById('cmLow').value,
+    med:      document.getElementById('cmMed').value,
+    high:     document.getElementById('cmHigh').value,
+  };
+  closeCmModal();
+  renderAlertList(getMapped()); // refresh badges
+}
+
+function copyCmSnippet() {
+  const name  = document.getElementById('cmName').value || 'My Custom Metric';
+  const desc  = document.getElementById('cmDesc').value;
+  const sql   = document.getElementById('cmSQL').value;
+  const unit  = document.getElementById('cmUnit').value || 'Count';
+  const low   = document.getElementById('cmLow').value;
+  const med   = document.getElementById('cmMed').value;
+  const high  = document.getElementById('cmHigh').value;
+
+  const snippet = `# Custom Metric: ${name}
+# Description : ${desc}
+# Unit        : ${unit}
+# Thresholds  : Low=${low||'?'} | Medium=${med||'?'} | High=${high||'?'}
+#
+# 1. In Redgate Monitor go to: Configuration > Custom metrics and alerts > Add custom metric
+# 2. Set name to: "${name}"
+# 3. Paste the T-SQL below into the query editor
+# 4. Set unit to "${unit}" and configure the thresholds above
+#
+# T-SQL:
+${sql.split('\n').map(l => '# ' + l).join('\n')}`;
+
+  navigator.clipboard.writeText(snippet).then(() => {
+    const btn = document.querySelector('#cmPanel .btn-group .btn:nth-child(2)');
+    if (btn) { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy PS snippet', 1800); }
+  });
+}
+
+// ── Visual grouped alert list ──────────────────────────────────────────────
+function renderAlertList(mapped) {
+  const sorted = sortMapped(mapped);
+  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : 'IDERA';
+  const groups = { direct: [], partial: [], custom: [], none: [] };
+  sorted.forEach(a => {
+    const r = resolveRgType(a.alertType, a.alertName, a.message);
+    groups[r.match] = groups[r.match] || [];
+    groups[r.match].push({ a, r });
+  });
+
+  const groupConfig = [
+    { key: 'direct',  label: 'Direct replacements',        cls: 'mgh-direct',  icon: '&#10003;', desc: 'Enable these built-in Redgate Monitor alerts immediately — no setup required.' },
+    { key: 'partial', label: 'Partial / configured match', cls: 'mgh-partial', icon: '&#9432;',  desc: 'Built-in RG alert covers the intent but needs threshold tuning or XE supplement.' },
+    { key: 'custom',  label: 'Custom metric required',     cls: 'mgh-custom',  icon: '&#9881;',  desc: 'No built-in equivalent — click Configure to define the T-SQL custom metric.' },
+    { key: 'none',    label: 'Not available in Redgate',   cls: 'mgh-none',    icon: '&#10007;', desc: 'No T-SQL or Redgate Monitor equivalent. See alternative recommendations.' },
+  ];
+
+  const html = groupConfig.map(gc => {
+    const items = groups[gc.key] || [];
+    if (!items.length) return '';
+    const saved = items.every(({ a }) => cmDefs[((resolveRgType(a.alertType,a.alertName,a.message).rgType)+'|'+a.alertName).toLowerCase()]);
+    const rows = items.map(({ a, r }) => {
+      const sev = a.severity.toLowerCase();
+      const sevClass = sev === 'high' ? 'badge-high' : sev === 'medium' ? 'badge-med' : 'badge-low';
+      const cmKey = (r.rgType + '|' + a.alertName).toLowerCase();
+      const hasDef = !!cmDefs[cmKey];
+      const cmBadge = gc.key === 'custom'
+        ? `<button class="cm-btn" onclick="openCmModal(alerts[${a._id}])">${hasDef ? '&#10003; Configured' : '&#9881; Configure'}</button>`
+        : '';
+      const noteBadge = gc.key === 'none'
+        ? `<span class="note-pill" title="${esc(r.note)}">No equivalent</span>` : '';
+      return `<div class="alert-card">
+        <input type="checkbox" ${a._excluded?'':'checked'} style="margin-top:3px" onchange="alerts[${a._id}]._excluded=!this.checked">
+        <div class="alert-card-body">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <span class="alert-card-name">${esc(a.alertName||'(unnamed)')}</span>
+            <span class="badge ${sevClass}">${esc(a.severity||'—')}</span>
+          </div>
+          <div class="alert-card-meta">${esc(a.instance||'—')} &middot; ${esc(a.startTime||'definition only')}</div>
+          <div class="alert-card-mapping">
+            <div class="mapping-flow">
+              <span>${srcLabel}: <strong>${esc(a.alertType||'—')}</strong></span>
+              <span class="flow-arrow">→</span>
+              <span>RG: <strong>${esc(r.rgType)}</strong></span>
+              ${a.threshold ? `<span style="color:var(--text3)">· threshold ${esc(a.threshold)}</span>` : ''}
+            </div>
+            ${cmBadge}${noteBadge}
+          </div>
+          ${gc.key === 'none' ? `<div style="font-size:11px;color:var(--text3);margin-top:3px">${esc(r.note)}</div>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+    return `<div class="match-group">
+      <div class="match-group-header ${gc.cls}" onclick="toggleMatchGroup(this)">
+        <span>${gc.icon}</span>
+        <span>${gc.label}</span>
+        <span style="font-size:11px;font-weight:400;opacity:.75;margin-left:4px">— ${gc.desc}</span>
+        <span class="mgh-count">${items.length} condition${items.length!==1?'s':''}</span>
+        <span class="mgh-chevron">&#9660;</span>
+      </div>
+      <div class="match-group-body">${rows}</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('alertList').innerHTML = html ||
+    '<p style="color:var(--text2);font-size:13px">No alerts parsed yet.</p>';
+}
+
+function toggleMatchGroup(header) {
+  header.classList.toggle('collapsed');
+  const body = header.nextElementSibling;
+  body.style.display = header.classList.contains('collapsed') ? 'none' : '';
+}
+
+// ── Summary / migration report ─────────────────────────────────────────────
+function showSummaryReport() {
+  const mapped = getMapped();
+  if (!mapped.length) { alert('No alerts loaded — import and preview first.'); return; }
+
+  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : 'IDERA';
+  const inc = mapped.filter(a => !a._excluded);
+  const direct  = inc.filter(a => resolveRgType(a.alertType,a.alertName,a.message).match === 'direct').length;
+  const partial = inc.filter(a => resolveRgType(a.alertType,a.alertName,a.message).match === 'partial').length;
+  const custom  = inc.filter(a => resolveRgType(a.alertType,a.alertName,a.message).match === 'custom').length;
+  const none    = inc.filter(a => resolveRgType(a.alertType,a.alertName,a.message).match === 'none').length;
+  const highN   = inc.filter(a => a.severity.toLowerCase() === 'high').length;
+  const directPct = inc.length ? Math.round(direct/inc.length*100) : 0;
+  const customPct = inc.length ? Math.round(custom/inc.length*100) : 0;
+
+  // Unique custom metric groups needed
+  const customTypes = [...new Set(inc
+    .filter(a => resolveRgType(a.alertType,a.alertName,a.message).match === 'custom')
+    .map(a => resolveRgType(a.alertType,a.alertName,a.message).rgType))];
+
+  const summaryText = `This migration plan converts ${inc.length} ${srcLabel} conditions into Redgate Monitor equivalents.
+${direct} condition${direct!==1?'s':''} (${directPct}%) map directly to built-in Redgate Monitor alert types and can be activated immediately with no additional configuration required.
+${partial > 0 ? `${partial} condition${partial!==1?'s':''} have partial equivalents that require threshold tuning or supplemental Extended Events / error log monitoring.` : ''}
+${custom > 0 ? `${custom} condition${custom!==1?'s':''} (${customPct}%) require custom T-SQL metrics to be created in Redgate Monitor before migration. ${customTypes.length} distinct metric type${customTypes.length!==1?'s are':' is'} needed.` : ''}
+${none > 0 ? `${none} condition${none!==1?'s':''} have no Redgate Monitor equivalent and cannot be migrated — alternative monitoring approaches are documented in the gap analysis below.` : ''}
+${highN > 0 ? `\nPriority: ${highN} High-severity condition${highN!==1?'s':''} should be configured in Redgate Monitor first.` : ''}
+Recommended order: (1) Activate direct replacements immediately. (2) Tune thresholds for partial matches to align with your SLAs. (3) Build custom metrics in priority order using the T-SQL queries in the export.`;
+
+  // Gap analysis rows
+  const gapRows = inc
+    .filter(a => resolveRgType(a.alertType,a.alertName,a.message).match === 'none')
+    .map(a => {
+      const r = resolveRgType(a.alertType,a.alertName,a.message);
+      return `<tr>
+        <td><strong>${esc(a.alertName)}</strong></td>
+        <td>${esc(a.alertType||'—')}</td>
+        <td>${esc(r.note)}</td>
+      </tr>`;
+    }).join('');
+
+  // Custom metrics needing setup
+  const customRows = inc
+    .filter(a => resolveRgType(a.alertType,a.alertName,a.message).match === 'custom')
+    .map(a => {
+      const r = resolveRgType(a.alertType,a.alertName,a.message);
+      const sev = a.severity.toLowerCase();
+      const sevCls = sev==='high'?'badge-high':sev==='medium'?'badge-med':'badge-low';
+      const sql = extractSQLFromNote(r.note);
+      return `<div class="rpt-mapping-row">
+        <span class="badge ${sevCls}">${esc(a.severity)}</span>
+        <strong style="font-size:12px">${esc(a.alertName)}</strong>
+        <span style="color:var(--text3)">→</span>
+        <span style="font-size:11px;color:var(--text2)">${esc(r.rgType)}</span>
+        ${sql ? `<code style="font-size:10px;background:var(--bg3);padding:1px 5px;border-radius:3px;color:var(--text2)">${esc(sql.slice(0,80))}${sql.length>80?'…':''}</code>` : ''}
+      </div>`;
+    }).join('');
+
+  // All mappings table
+  const allRows = inc.map(a => {
+    const r = resolveRgType(a.alertType,a.alertName,a.message);
+    const sev = a.severity.toLowerCase();
+    const sevCls = sev==='high'?'badge-high':sev==='medium'?'badge-med':'badge-low';
+    const mCls = r.match==='direct'?'badge-direct':r.match==='partial'?'badge-partial':r.match==='none'?'badge-none':'badge-custom';
+    return `<tr>
+      <td>${esc(a.alertName||'—')}</td>
+      <td>${esc(a.instance||'—')}</td>
+      <td><span class="badge ${sevCls}">${esc(a.severity)}</span></td>
+      <td>${esc(a.alertType||'—')}</td>
+      <td>${esc(r.rgType)}</td>
+      <td><span class="badge ${mCls}">${r.match}</span></td>
+    </tr>`;
+  }).join('');
+
+  // Notification groups
+  const notifSection = notifGroups.filter(g => g.ssGroup).length
+    ? `<div class="report-section">
+        <div class="report-section-title">Notification group migration</div>
+        <table class="gap-table">
+          <thead><tr><th>SQL Sentry group</th><th>Redgate Monitor action</th><th>Target</th></tr></thead>
+          <tbody>${notifGroups.filter(g=>g.ssGroup).map(g=>`<tr><td>${esc(g.ssGroup)}</td><td>${esc(g.rgAction)}</td><td>${esc(g.rgTarget||'—')}</td></tr>`).join('')}</tbody>
+        </table>
+        <p style="font-size:11px;color:var(--text3);margin-top:6px">Configure notification profiles in Redgate Monitor under Configuration → Notification profiles, then assign to each alert type.</p>
+      </div>` : '';
+
+  document.getElementById('rptSubtitle').textContent =
+    `${srcLabel} → Redgate Monitor · ${inc.length} conditions · Generated ${new Date().toLocaleDateString()}`;
+
+  document.getElementById('rptBody').innerHTML = `
+    <div class="report-section">
+      <div class="report-section-title">Executive summary</div>
+      <div class="report-summary-box">${summaryText.replace(/\n/g,'<br>')}</div>
+    </div>
+
+    <div class="report-stats">
+      <div class="report-stat"><div class="n">${inc.length}</div><div class="l">Total conditions</div></div>
+      <div class="report-stat"><div class="n" style="color:var(--green-text)">${direct}</div><div class="l">Direct (ready now)</div></div>
+      <div class="report-stat"><div class="n" style="color:var(--purple-text)">${custom}</div><div class="l">Custom metric needed</div></div>
+      <div class="report-stat"><div class="n" style="color:var(--red-text)">${none}</div><div class="l">Not available</div></div>
+    </div>
+
+    ${none > 0 ? `<div class="report-section">
+      <div class="report-section-title">Gap analysis — conditions not available in Redgate Monitor</div>
+      <table class="gap-table">
+        <thead><tr><th>Condition name</th><th>Category</th><th>Reason / alternative</th></tr></thead>
+        <tbody>${gapRows}</tbody>
+      </table>
+    </div>` : ''}
+
+    ${custom > 0 ? `<div class="report-section">
+      <div class="report-section-title">Custom metrics required (${custom} conditions)</div>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:10px">Create these in Redgate Monitor: Configuration → Custom metrics and alerts → Add custom metric.</p>
+      ${customRows}
+    </div>` : ''}
+
+    ${notifSection}
+
+    <div class="report-section">
+      <div class="report-section-title">Complete mapping table</div>
+      <table class="gap-table">
+        <thead><tr><th>Alert name</th><th>Instance</th><th>Severity</th><th>SS category</th><th>RG alert type</th><th>Match</th></tr></thead>
+        <tbody>${allRows}</tbody>
+      </table>
+    </div>`;
+
+  document.getElementById('summaryOverlay').style.display = 'block';
+  document.getElementById('summaryOverlay').scrollTop = 0;
+}
+
+function closeSummaryReport() {
+  document.getElementById('summaryOverlay').style.display = 'none';
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 function mapSev(s) {
   const v=(s||'').toLowerCase();
   if (v==='high'||v==='critical'||v==='error') return 'High';
   if (v==='medium'||v==='med'||v==='warning'||v==='warn') return 'Medium';
-  return 'Low'; // low, info, informational
+  return 'Low';
 }
 function san(s)    { return (s||'').replace(/[^a-zA-Z0-9]/g,'_'); }
 function esc(s)    { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function esc2(s)   { return (s||'').replace(/'/g,"''"); }
+function pq(s)     { return `'${(s||'').replace(/'/g,"''")}'`; }
 function sq(s)     { return s ? `N'${(s||'').replace(/'/g,"''")}'` : 'NULL'; }
 function sqdt(s)   { return s && s.trim() ? `'${s.trim()}'` : 'NULL'; }
 function toISO(s)  { try { return new Date(s).toISOString(); } catch { return s; } }
