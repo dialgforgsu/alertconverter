@@ -380,15 +380,32 @@
   }
 
   @media print {
-    body { background: #fff; color: #111; }
-    .stepper, .btn, .btn-group, footer, #tab0, #tab1, #tab3,
-    .sort-bar, .pdf-btn-row, input[type="checkbox"] { display: none !important; }
-    #tab2 { display: block !important; }
-    .stats-grid { display: flex; gap: 16px; margin-bottom: 16px; }
-    .stat-card { border: 0.5px solid #ccc; border-radius: 6px; padding: 8px 14px; }
-    .card { box-shadow: none; border: 0.5px solid #ccc; }
-    .alert-item { break-inside: avoid; }
-    .print-header { display: block !important; font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+    /* Default print: show the alert preview tab only */
+    body:not(.printing-report) { background: #fff; color: #111; }
+    body:not(.printing-report) .stepper,
+    body:not(.printing-report) .btn,
+    body:not(.printing-report) .btn-group,
+    body:not(.printing-report) footer,
+    body:not(.printing-report) #tab0,
+    body:not(.printing-report) #tab1,
+    body:not(.printing-report) #tab3,
+    body:not(.printing-report) .sort-bar,
+    body:not(.printing-report) .pdf-btn-row,
+    body:not(.printing-report) input[type="checkbox"] { display: none !important; }
+    body:not(.printing-report) #tab2 { display: block !important; }
+    body:not(.printing-report) .stats-grid { display: flex; gap: 16px; margin-bottom: 16px; }
+    body:not(.printing-report) .stat-card { border: 0.5px solid #ccc; border-radius: 6px; padding: 8px 14px; }
+    body:not(.printing-report) .card { box-shadow: none; border: 0.5px solid #ccc; }
+    body:not(.printing-report) .alert-item { break-inside: avoid; }
+    body:not(.printing-report) .print-header { display: block !important; font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+    /* Report overlay print: hide everything except the overlay */
+    body.printing-report .stepper,
+    body.printing-report .btn-group,
+    body.printing-report footer,
+    body.printing-report #tab0,
+    body.printing-report #tab1,
+    body.printing-report #tab2,
+    body.printing-report #tab3 { display: none !important; }
     @page { margin: 18mm 14mm; }
   }
   .print-header { display: none; }
@@ -549,7 +566,6 @@
   @media print {
     #summaryOverlay { position: static; overflow: visible; }
     .report-close, .report-print-btn { display: none !important; }
-    @page { margin: 18mm 14mm; }
   }
 </style>
 </head>
@@ -815,6 +831,7 @@ let previewSort = { col: 'startTime', dir: -1 };
 let notifGroups = []; // [{ssGroup, rgAction, rgTarget}]
 let cmDefs = {};      // keyed by rgType+alertName — user-edited custom metric definitions
 let cmCurrent = null; // alert being configured in modal
+const RG_NOTIF_ACTIONS = ['Email','Microsoft Teams','Slack','PagerDuty','Webhook','OpsGenie','Custom'];
 
 // ── DPA Alert type mapping ─────────────────────────────────────────────────
 const DPA_TYPE_MAP = [
@@ -2055,8 +2072,6 @@ addNotifGroup();
 })();
 
 // ── Notification group mapping ─────────────────────────────────────────────
-const RG_NOTIF_ACTIONS = ['Email','Microsoft Teams','Slack','PagerDuty','Webhook','OpsGenie','Custom'];
-
 function renderNotifGroups() {
   const rows = notifGroups.map((g, i) => `
     <div class="notif-row" id="ng-${i}">
@@ -2369,10 +2384,12 @@ Recommended order: (1) Activate direct replacements immediately. (2) Tune thresh
 
   document.getElementById('summaryOverlay').style.display = 'block';
   document.getElementById('summaryOverlay').scrollTop = 0;
+  document.body.classList.add('printing-report');
 }
 
 function closeSummaryReport() {
   document.getElementById('summaryOverlay').style.display = 'none';
+  document.body.classList.remove('printing-report');
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
