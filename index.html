@@ -494,6 +494,52 @@
   }
   .cm-btn:hover { filter: brightness(0.95); }
 
+  /* ── Inline T-SQL card block ── */
+  .cm-sql-card-block {
+    margin-top: 8px;
+    border: 0.5px solid var(--purple-border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .cm-sql-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 10px;
+    background: var(--purple-bg);
+    border-bottom: 0.5px solid var(--purple-border);
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--purple-text);
+    letter-spacing: .03em;
+    text-transform: uppercase;
+  }
+  .cm-sql-card-pre {
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    font-size: 11px;
+    line-height: 1.55;
+    color: var(--text);
+    background: var(--bg2);
+    padding: 8px 10px;
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 160px;
+    overflow-y: auto;
+  }
+  .cm-copy-sql-btn {
+    font-size: 10px;
+    padding: 1px 8px;
+    background: transparent;
+    border: 0.5px solid var(--purple-border);
+    border-radius: 4px;
+    color: var(--purple-text);
+    cursor: pointer;
+    font-family: inherit;
+    white-space: nowrap;
+  }
+  .cm-copy-sql-btn:hover { background: rgba(0,0,0,.06); }
+
   /* ── Custom metric modal ── */
   .modal-backdrop {
     position: fixed; inset: 0;
@@ -859,6 +905,21 @@ let notifGroups = []; // [{ssGroup, rgAction, rgTarget}]
 let cmDefs = {};      // keyed by rgType+alertName — user-edited custom metric definitions
 let cmCurrent = null; // alert being configured in modal
 const RG_NOTIF_ACTIONS = ['Email','Microsoft Teams','Slack','PagerDuty','Webhook','OpsGenie','Custom'];
+
+// ── Inline T-SQL copy cache ────────────────────────────────────────────────
+// Keyed by alert _id, populated during renderAlertList — avoids escaping SQL
+// into onclick attributes which is unsafe with complex T-SQL strings.
+const _cardSqlMap = new Map();
+
+function copyCardSql(btn) {
+  const id = parseInt(btn.dataset.sqlId, 10);
+  const sql = _cardSqlMap.get(id);
+  if (!sql) return;
+  navigator.clipboard.writeText(sql).then(() => {
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy T-SQL', 1800);
+  });
+}
 
 // ── DPA Alert type mapping ─────────────────────────────────────────────────
 const DPA_TYPE_MAP = [
@@ -2057,8 +2118,69 @@ CREATE TABLE dbo.${tblName} (
     const r = resolveRgType(a.alertType, a.alertName, a.message);
     s += `INSERT INTO dbo.${tblName} (AlertName,SourceCategory,RGAlertType,RGCategory,MatchType,Severity,DatabaseInstance,Message,Threshold,CurrentValue,StartTime,EndTime,Status,RGNote) VALUES (${sq(a.alertName)},${sq(a.alertType)},${sq(r.rgType)},${sq(r.rgCat)},${sq(r.match)},${sq(a.severity)},${sq(a.instance)},${sq(a.message)},${sq(a.threshold)},${sq(a.currentValue)},${sqdt(a.startTime)},${sqdt(a.endTime)},${sq(a.status)},${sq(r.note)});\n`;
   });
-  s += `\n-- Alerts needing custom metric setup in Redgate Monitor:\nSELECT DISTINCT RGAlertType, RGNote FROM dbo.${tblName} WHERE MatchType = 'custom';\n`;
-  s += `\n-- Alerts NOT AVAILABLE in Redgate Monitor (no T-SQL or RG equivalent):\nSELECT AlertName, RGNote FROM dbo.${tblName} WHERE MatchType = 'none';\n`;
+  s += `\n-- Diagnostic: alerts needing custom metric setup in Redgate Monitor\nSELECT DISTINCT RGAlertType, RGNote FROM dbo.${tblName} WHERE MatchType = 'custom';\n`;
+  s += `\n-- Diagnostic: alerts NOT AVAILABLE in Redgate Monitor\nSELECT AlertName, RGNote FROM dbo.${tblName} WHERE MatchType IN ('none','retire');\n`;
+
+  // ── Section 2: custom metric T-SQL definitions ────────────────────────────
+  const customItems = list.map(a => ({ a, r: resolveRgType(a.alertType, a.alertName, a.message) }))
+                          .filter(({ r }) => r.match === 'custom');
+
+  // Deduplicate by rgType — same metric type regardless of how many alerts triggered it
+  const seenTypes = new Map();
+  customItems.forEach(({ a, r }) => {
+    if (!seenTypes.has(r.rgType)) seenTypes.set(r.rgType, { a, r });
+  });
+  const uniqueCustom = [...seenTypes.values()];
+
+  if (uniqueCustom.length > 0) {
+    const bar = '═'.repeat(68);
+    s += `
+-- ${bar}
+-- SECTION 2: CUSTOM METRIC T-SQL DEFINITIONS
+-- ${bar}
+-- How to create each custom metric in Redgate Monitor:
+--   1. Go to: Configuration → Custom metrics and alerts → Add custom metric
+--   2. Set the metric name exactly as shown in each block below
+--   3. Paste the T-SQL query into the query editor
+--   4. Set the unit and configure Low / Medium / High thresholds
+--   5. Assign the metric to the relevant monitored SQL Server instances
+-- ${bar}
+`;
+
+    uniqueCustom.forEach(({ a, r }, i) => {
+      const key = (r.rgType + '|' + a.alertName).toLowerCase();
+      const def = cmDefs[key] || {};
+      const metricName = def.name || a.alertName || r.rgType;
+      const sql = def.sql || extractSQLFromNote(r.note) || '-- TODO: write a T-SQL query that returns a single numeric value';
+      const unit = def.unit || 'Count';
+      const low  = def.low  || '(set based on your environment)';
+      const med  = def.med  || '(set based on your environment)';
+      const high = def.high || '(set based on your environment)';
+      const div  = '─'.repeat(68);
+
+      s += `
+-- ${div}
+-- [${i + 1}] ${metricName}
+-- ${div}
+-- Source alert : ${a.alertName}
+-- RG metric type: ${r.rgType}
+-- Category     : ${r.rgCat}
+-- Unit         : ${unit}
+-- Thresholds   : Low = ${low}
+--                Medium = ${med}
+--                High = ${high}
+-- Collection   : ${def.interval || 'Every 5 minutes (recommended)'}
+--
+-- Paste this query into Redgate Monitor when creating the custom metric.
+-- The query MUST return a single numeric row — wrap in SELECT TOP 1 if needed.
+--
+${sql}
+GO
+
+`;
+    });
+  }
+
   return s;
 }
 
@@ -2072,7 +2194,7 @@ function showOutput(mode) {
   const notes = {
     ps:   `Signed PowerShell module (.psm1) with WhatIf, transcript logging, and rollback log. Import-Module then call the exported function. Use -WhatIf for a dry run. Alerts marked [CUSTOM METRIC REQUIRED] need a custom metric built in Redgate Monitor first (Configuration → Custom metrics and alerts).`,
     json: `POST this JSON to a webhook or routing layer. Each record carries both the ${src} category and the resolved Redgate Monitor alert type for downstream logic.`,
-    sql:  `Creates a staging table with full type mapping columns. The query at the bottom lists which alert types need custom metrics built in Redgate Monitor.`
+    sql:  `Two sections: (1) Staging table with full type mapping — use for gap analysis and record-keeping. (2) Custom metric T-SQL definitions — one ready-to-paste query per unique custom metric type, with name, unit, and threshold guidance. Copy each block directly into Redgate Monitor: Configuration → Custom metrics and alerts → Add custom metric.`
   };
   document.getElementById('outputNote').textContent = notes[mode];
   const out = mode==='ps' ? window._psOut : mode==='json' ? window._jsonOut : window._sqlOut;
@@ -2285,6 +2407,7 @@ function renderAlertList(mapped) {
   const sorted = sortMapped(mapped);
   const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'dpa' ? 'SolarWinds DPA' : 'IDERA';
   const groups = { direct: [], partial: [], custom: [], none: [] };
+  _cardSqlMap.clear(); // reset cache before each render
   sorted.forEach(a => {
     const r = resolveRgType(a.alertType, a.alertName, a.message);
     groups[r.match] = groups[r.match] || [];
@@ -2318,6 +2441,33 @@ function renderAlertList(mapped) {
         : gc.key === 'partial'
         ? `<span class="note-pill" style="background:var(--amber-bg);color:var(--amber-text);border-color:var(--amber-border)" title="${esc(r.note)}">⚠ Behavior differs</span>`
         : '';
+
+      // For custom-metric cards: resolve and cache the T-SQL, then render inline
+      let sqlBlock = '';
+      if (gc.key === 'custom') {
+        const savedDef = cmDefs[cmKey] || {};
+        const rawSql = savedDef.sql || extractSQLFromNote(r.note);
+        if (rawSql) {
+          _cardSqlMap.set(a._id, rawSql);
+          sqlBlock = `<div class="cm-sql-card-block">
+            <div class="cm-sql-card-header">
+              <span>T-SQL &mdash; paste into Redgate Monitor &rsaquo; Configuration &rsaquo; Custom metrics and alerts</span>
+              <button class="cm-copy-sql-btn" data-sql-id="${a._id}" onclick="copyCardSql(this)">Copy T-SQL</button>
+            </div>
+            <pre class="cm-sql-card-pre">${esc(rawSql)}</pre>
+          </div>`;
+        } else {
+          sqlBlock = `<div class="cm-sql-card-block">
+            <div class="cm-sql-card-header">
+              <span>T-SQL &mdash; click Configure to add a custom query</span>
+            </div>
+            <pre class="cm-sql-card-pre" style="color:var(--text3);font-style:italic">-- No T-SQL available for this condition type.
+-- Click ⚙ Configure above to write your own query.
+-- The query must return a single numeric value.</pre>
+          </div>`;
+        }
+      }
+
       return `<div class="alert-card">
         <input type="checkbox" ${a._excluded?'':'checked'} style="margin-top:3px" onchange="alerts[${a._id}]._excluded=!this.checked">
         <div class="alert-card-body">
@@ -2336,6 +2486,7 @@ function renderAlertList(mapped) {
             ${cmBadge}${noteBadge}
           </div>
           ${(gc.key === 'none' || gc.key === 'retire' || gc.key === 'partial') ? `<div style="font-size:11px;color:var(--text3);margin-top:3px">${esc(r.note)}</div>` : ''}
+          ${sqlBlock}
         </div>
       </div>`;
     }).join('');
