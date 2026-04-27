@@ -579,7 +579,7 @@
     </svg>
     Alert → Redgate Monitor
   </a>
-  <span class="nav-badge">v1.1</span>
+  <span class="nav-badge">v1.2</span>
   <div class="nav-spacer"></div>
   <button class="theme-btn" id="themeBtn" onclick="toggleTheme()">
     <svg id="themeIcon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></svg>
@@ -599,6 +599,7 @@
     <div class="source-selector" id="sourceSelector">
       <button class="source-btn active" id="srcSS"    draggable="true" onclick="setSource('sqlsentry')">SQL Sentry</button>
       <button class="source-btn"        id="srcIDERA" draggable="true" onclick="setSource('idera')">IDERA</button>
+      <button class="source-btn"        id="srcDPA"   draggable="true" onclick="setSource('dpa')">DPA</button>
     </div>
   </div>
 
@@ -635,6 +636,24 @@
         <button class="btn" onclick="loadSample()">Load sample data</button>
         <button class="btn btn-sm" onclick="document.getElementById('rawPaste').value='';alerts=[]">Clear</button>
       </div>
+    </div>
+
+    <!-- DPA how-to -->
+    <div class="card hidden" id="howToDPA">
+      <div class="section-title">How to export alerts from SolarWinds DPA</div>
+      <p style="font-size:12px;color:var(--text2);line-height:1.8">
+        In the DPA web console, navigate to <strong>Alerts → Alert History</strong> on the instance you want to export.
+        Use the date range picker to select your time window, then click <strong>Export to CSV</strong> in the top-right of the alert table.
+        The exported file includes columns: <code>AlertName</code>, <code>Severity</code>, <code>DatabaseInstance</code>,
+        <code>StartTime</code>, <code>AlertType</code>, <code>Message</code>, <code>Threshold</code>, <code>CurrentValue</code>.
+        Severity levels map as: <strong>Fatal → High</strong>, <strong>Critical → High</strong>,
+        <strong>Warning → Medium</strong>, <strong>Informational → Low</strong>.
+        <br><br>
+        <strong>DPA-specific alert types with no Redgate Monitor equivalent:</strong>
+        <em>DPA Monitor Error</em>, <em>DPA Resource Collection Error</em>, and <em>Round-trip Time Probe</em>
+        are internal DPA health alerts that cannot be recreated — they will be flagged as Not Available in the mapping.
+        Wait Time Anomaly and Query Throughput Anomaly alerts require Redgate Monitor v14+ Dynamic alerts for the closest equivalent.
+      </p>
     </div>
 
     <!-- IDERA how-to -->
@@ -1169,43 +1188,52 @@ function setSource(mode) {
   sourceMode = mode;
   document.getElementById('srcSS').classList.toggle('active',    mode === 'sqlsentry');
   document.getElementById('srcIDERA').classList.toggle('active', mode === 'idera');
+  document.getElementById('srcDPA').classList.toggle('active',   mode === 'dpa');
   const titles = {
     sqlsentry: 'SQL Sentry → Redgate Monitor',
-    idera:     'IDERA → Redgate Monitor'
+    idera:     'IDERA → Redgate Monitor',
+    dpa:       'SolarWinds DPA → Redgate Monitor'
   };
   const descs = {
     sqlsentry: 'Convert SolarWinds SQL Sentry alert exports into Redgate Monitor–ready PowerShell modules, webhook JSON, or SQL — with full alert type mapping, gap analysis, and notification group migration.',
-    idera:     'Convert IDERA SQL Diagnostic Manager alert exports into Redgate Monitor–ready PowerShell modules, webhook JSON, or SQL — with full SQLdm alert type mapping applied automatically.'
+    idera:     'Convert IDERA SQL Diagnostic Manager alert exports into Redgate Monitor–ready PowerShell modules, webhook JSON, or SQL — with full SQLdm alert type mapping applied automatically.',
+    dpa:       'Convert SolarWinds DPA (Database Performance Analyzer) alert exports into Redgate Monitor–ready PowerShell modules, webhook JSON, or SQL — with wait time proxy mapping, DPA-specific gap analysis, and severity conversion.'
   };
-  const cardTitles = { sqlsentry: 'Import SQL Sentry alert export', idera: 'Import IDERA alert export' };
+  const cardTitles = { sqlsentry: 'Import SQL Sentry alert export', idera: 'Import IDERA alert export', dpa: 'Import DPA alert export' };
   const dropLabels = {
     sqlsentry: 'Drop SQL Sentry .condition files, a ZIP, or a CSV here, or click to browse',
-    idera:     'Drop an IDERA CSV or ZIP here, or click to browse'
+    idera:     'Drop an IDERA CSV or ZIP here, or click to browse',
+    dpa:       'Drop a DPA CSV or ZIP here, or click to browse'
   };
   const mapSubs = {
     sqlsentry: 'SQL Sentry column → Redgate Monitor field. Auto-matched where column names align — override any below.',
-    idera:     'IDERA column → Redgate Monitor field. Auto-matched where column names align — override any below.'
+    idera:     'IDERA column → Redgate Monitor field. Auto-matched where column names align — override any below.',
+    dpa:       'DPA column → Redgate Monitor field. Auto-matched where column names align — override any below.'
   };
   document.getElementById('heroTitle').textContent       = titles[mode]     || titles.sqlsentry;
   document.getElementById('heroDesc').textContent        = descs[mode]      || descs.sqlsentry;
   document.getElementById('importCardTitle').textContent = cardTitles[mode] || cardTitles.sqlsentry;
   document.getElementById('dropLabel').textContent       = dropLabels[mode] || dropLabels.sqlsentry;
   document.getElementById('mapSubtitle').textContent     = mapSubs[mode]    || mapSubs.sqlsentry;
+  document.getElementById('howToDPA').classList.toggle('hidden',   mode !== 'dpa');
   document.getElementById('howToIDERA').classList.toggle('hidden', mode !== 'idera');
   document.getElementById('howToSS').classList.toggle('hidden',    mode !== 'sqlsentry');
 
   // Update notification card to match source terminology
   const notifTitles = {
     sqlsentry: 'Notification group mapping',
-    idera:     'Alert Action mapping'
+    idera:     'Alert Action mapping',
+    dpa:       'Notification profile mapping'
   };
   const notifDescs = {
     sqlsentry: 'Map each SQL Sentry notification / email group to a Redgate Monitor notification action. These are included in the generated PowerShell module as configuration guidance.',
-    idera:     'Map each IDERA Alert Action (email subscription, SNMP trap, script) to a Redgate Monitor notification action. In IDERA these are called Alert Actions + Subscriptions; in Redgate Monitor they are Notification profiles assigned per alert type.'
+    idera:     'Map each IDERA Alert Action (email subscription, SNMP trap, script) to a Redgate Monitor notification action. In IDERA these are called Alert Actions + Subscriptions; in Redgate Monitor they are Notification profiles assigned per alert type.',
+    dpa:       'Map each DPA notification target (email recipient, SNMP trap, script) to a Redgate Monitor notification action. In DPA these are configured per-alert under Alert Settings → Notifications; in Redgate Monitor they are Notification profiles assigned per alert type.'
   };
   const notifHints = {
     sqlsentry: '',
-    idera: '<div class="info-box" style="margin-top:10px;font-size:11px"><strong>Threshold conversion reminder:</strong> IDERA "Days Since Last Backup" → multiply × 24 for RG Monitor hours. "Oldest Open Transaction" minutes → multiply × 60 for RG Monitor seconds. "OS Memory Usage %" → convert to available MB (total_ram × (1 − pct/100)).</div>'
+    idera: '<div class="info-box" style="margin-top:10px;font-size:11px"><strong>Threshold conversion reminder:</strong> IDERA "Days Since Last Backup" → multiply × 24 for RG Monitor hours. "Oldest Open Transaction" minutes → multiply × 60 for RG Monitor seconds. "OS Memory Usage %" → convert to available MB (total_ram × (1 − pct/100)).</div>',
+    dpa:   '<div class="info-box" style="margin-top:10px;font-size:11px"><strong>DPA threshold conversion reminders:</strong> DPA Severity "Fatal/Critical" → Redgate Monitor "High". "Warning" → "Medium". "Informational" → "Low". Wait time thresholds are in ms — DPA cumulative wait vs RG rate-of-change (ms/min). Memory Available: DPA uses %, Redgate Monitor uses MB available (total_RAM_MB × (1 − pct/100)). Disk Space: DPA "free %" → Redgate Monitor "used %" (100 − free_pct). Blocking: DPA threshold in ms ÷ 1000 = RG seconds.</div>'
   };
   document.getElementById('notifGroupTitle').textContent = notifTitles[mode] || notifTitles.sqlsentry;
   document.getElementById('notifGroupDesc').textContent  = notifDescs[mode]  || notifDescs.sqlsentry;
@@ -1302,9 +1330,17 @@ function finalizeConditionImport(allAlerts, summary) {
   const hasConditions = summary.some(s => s.fmt === 'ss-condition');
   const ssCount    = summary.filter(s => s.fmt.startsWith('ss')).length;
   const ideraCount = summary.filter(s => s.fmt === 'idera').length;
-  sourceMode = ssCount >= Math.ceil(summary.length / 2) ? 'sqlsentry' : 'idera';
+  const dpaCount   = summary.filter(s => s.fmt === 'dpa').length;
+  if (dpaCount >= Math.ceil(summary.length / 2)) {
+    sourceMode = 'dpa';
+  } else if (ssCount >= Math.ceil(summary.length / 2)) {
+    sourceMode = 'sqlsentry';
+  } else {
+    sourceMode = 'idera';
+  }
   document.getElementById('srcSS').classList.toggle('active',    sourceMode === 'sqlsentry');
   document.getElementById('srcIDERA').classList.toggle('active', sourceMode === 'idera');
+  document.getElementById('srcDPA').classList.toggle('active',   sourceMode === 'dpa');
 
   alerts = allAlerts;
   colHeaders = ['alertName','severity','instance','startTime','endTime','alertType','message','threshold','currentValue','status'];
@@ -1332,6 +1368,7 @@ function finalizeConditionImport(allAlerts, summary) {
 // Detect format of a CSV/TXT file (not .condition — those are handled by extension)
 function detectFormat(text) {
   const h = text.trim().split('\n')[0].toLowerCase();
+  if (h.includes('databaseinstance') || h.includes('database instance') || (h.includes('alertname') && h.includes('alerttype') && !h.includes('target'))) return 'dpa';
   if (h.includes('target') || h.includes('condition type') || h.includes('ack')) return 'ss-csv';
   if (h.includes('sqldm') || h.includes('sqld') || (h.includes('category') && h.includes('sqlserver')) || (h.includes('alert') && h.includes('current value') && h.includes('category'))) return 'idera';
   return 'ss-csv';
@@ -1488,7 +1525,24 @@ function inferConditionAlertType(areas, tags, name) {
 // ── Sample data ────────────────────────────────────────────────────────────
 function loadSample() {
   if (sourceMode === 'idera') { loadSampleIDERA(); return; }
+  if (sourceMode === 'dpa')   { loadSampleDPA();   return; }
   loadSampleSS();
+}
+
+function loadSampleDPA() {
+  document.getElementById('rawPaste').value =
+`AlertName,Severity,DatabaseInstance,StartTime,AlertType,Message,Threshold,CurrentValue
+High CPU Wait,Warning,PROD-SQL-01,2026-04-01 08:12:00,Resources,CPU utilization exceeded threshold,80,94
+Total Wait Time Anomaly,Warning,PROD-SQL-01,2026-04-01 09:03:00,Wait Time,Wait time anomaly detected — elevated PAGEIOLATCH wait,50000,187432
+Lock Wait Time,Critical,PROD-SQL-02,2026-04-01 07:55:00,Wait Time,Lock wait time exceeded threshold — blocking detected,5000,34210
+SQL Agent Job Failure,Critical,PROD-SQL-01,2026-04-01 06:00:00,Administrative,Job 'NightlyBackup' failed at step 2,0,1
+Disk Space Low,Critical,PROD-SQL-02,2026-04-01 10:00:00,Resources,Drive C: at 91% used (threshold: 90% used),90,91
+Backup Overdue,Warning,PROD-SQL-01,2026-04-01 13:00:00,Administrative,Database [Payroll] last backed up 36 hours ago,24,36
+Deadlock,Warning,PROD-SQL-01,2026-04-01 12:05:00,Administrative,Deadlock detected between sessions 44 and 67,0,1
+Memory Available Low,Warning,PROD-SQL-02,2026-04-01 11:30:00,Resources,Available memory below threshold,512,210
+Log Write Wait Time,Warning,PROD-SQL-01,2026-04-01 14:00:00,Wait Time,WRITELOG wait elevated — transaction log I/O pressure,5000,22847
+Physical IO Wait Time,Warning,PROD-SQL-01,2026-04-01 15:00:00,Wait Time,PAGEIOLATCH wait elevated — buffer pool I/O pressure,20000,98312`;
+  parseCSV();
 }
 
 function loadSampleSS() {
@@ -1658,7 +1712,7 @@ function buildPreview() {
   const high = mapped.filter(a => a.severity.toLowerCase() === 'high').length;
   const med  = mapped.filter(a => a.severity.toLowerCase() === 'medium').length;
   const low  = mapped.filter(a => ['low','info'].includes(a.severity.toLowerCase())).length;
-  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : 'IDERA';
+  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'dpa' ? 'SolarWinds DPA' : 'IDERA';
 
   document.getElementById('statsBar').innerHTML = `
     <div class="stat-card"><div class="stat-n">${mapped.length}</div><div class="stat-l">Total alerts</div></div>
@@ -1696,10 +1750,10 @@ function buildOutputs() {
 }
 
 function buildModule(list, url, tok, inst) {
-  const srcLabel   = sourceMode === 'sqlsentry' ? 'SQL Sentry' : 'IDERA SQL Diagnostic Manager';
-  const fnName     = sourceMode === 'sqlsentry' ? 'Import-SSAlertsToRedgateMonitor'  : 'Import-IDERAlertsToRedgateMonitor';
-  const rollbackFn = sourceMode === 'sqlsentry' ? 'Invoke-SSAlertRollback'           : 'Invoke-IDERAAlertRollback';
-  const notifLabel = sourceMode === 'sqlsentry' ? 'Notification groups'              : 'Alert Actions / Subscriptions';
+  const srcLabel   = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'dpa' ? 'SolarWinds DPA' : 'IDERA SQL Diagnostic Manager';
+  const fnName     = sourceMode === 'sqlsentry' ? 'Import-SSAlertsToRedgateMonitor'  : sourceMode === 'dpa' ? 'Import-DPAAlertsToRedgateMonitor' : 'Import-IDERAlertsToRedgateMonitor';
+  const rollbackFn = sourceMode === 'sqlsentry' ? 'Invoke-SSAlertRollback'           : sourceMode === 'dpa' ? 'Invoke-DPAAlertRollback'          : 'Invoke-IDERAAlertRollback';
+  const notifLabel = sourceMode === 'sqlsentry' ? 'Notification groups'              : sourceMode === 'dpa' ? 'Notification profiles'            : 'Alert Actions / Subscriptions';
   const byInst = {};
   list.forEach(a => { const k = a.instance||inst; (byInst[k]=byInst[k]||[]).push(a); });
   const customNeeded = [];
@@ -1923,7 +1977,7 @@ Export-ModuleMember -Function ${fnName}, ${rollbackFn}
 }
 
 function buildJSON(list) {
-  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : 'IDERA';
+  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'dpa' ? 'SolarWinds DPA' : 'IDERA';
   return JSON.stringify(list.map(a => {
     const r = resolveRgType(a.alertType, a.alertName, a.message);
     return {
@@ -1994,7 +2048,7 @@ function copyOutput() {
 }
 function downloadOutput() {
   const ext  = outputMode==='ps'?'.psm1':outputMode==='json'?'.json':'.sql';
-  const slug = sourceMode === 'sqlsentry' ? 'Import-SSAlerts' : 'Import-IDERAAlerts';
+  const slug = sourceMode === 'sqlsentry' ? 'Import-SSAlerts' : sourceMode === 'dpa' ? 'Import-DPAAlerts' : 'Import-IDERAAlerts';
   const a = document.createElement('a');
   a.href = 'data:text/plain;charset=utf-8,' + encodeURIComponent(document.getElementById('outputBlock').textContent);
   a.download = slug + ext; a.click();
@@ -2186,7 +2240,7 @@ ${sql.split('\n').map(l => '# ' + l).join('\n')}`;
 // ── Visual grouped alert list ──────────────────────────────────────────────
 function renderAlertList(mapped) {
   const sorted = sortMapped(mapped);
-  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : 'IDERA';
+  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'dpa' ? 'SolarWinds DPA' : 'IDERA';
   const groups = { direct: [], partial: [], custom: [], none: [] };
   sorted.forEach(a => {
     const r = resolveRgType(a.alertType, a.alertName, a.message);
@@ -2263,7 +2317,7 @@ function showSummaryReport() {
   const mapped = getMapped();
   if (!mapped.length) { alert('No alerts loaded — import and preview first.'); return; }
 
-  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : 'IDERA';
+  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'dpa' ? 'SolarWinds DPA' : 'IDERA';
   const inc = mapped.filter(a => !a._excluded);
   const direct  = inc.filter(a => resolveRgType(a.alertType,a.alertName,a.message).match === 'direct').length;
   const partial = inc.filter(a => resolveRgType(a.alertType,a.alertName,a.message).match === 'partial').length;

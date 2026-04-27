@@ -1,0 +1,1145 @@
+{
+  "manifest": {
+    "version": "1.0",
+    "source": "SolarWinds DPA (Database Performance Analyzer)",
+    "target": "Redgate Monitor",
+    "generatedDate": "2026-04-27",
+    "description": "Canonical mapping of SolarWinds DPA alert types to Redgate Monitor equivalents. DPA's core differentiator is 1-second wait time sampling stored in its own repository database and an ML-based anomaly detection model — neither is directly replicable in Redgate Monitor. This manifest provides the closest available T-SQL proxy metrics for each DPA alert type and marks alerts that have no viable equivalent as 'none'.",
+    "references": [
+      "https://documentation.solarwinds.com/en/success_center/dpa/content/core-dpa-alerts.htm",
+      "https://documentation.solarwinds.com/en/success_center/dpa/content/dpa-alert-types.htm"
+    ]
+  },
+
+  "severityMapping": {
+    "strategy": "DPA uses four severity levels: Informational, Warning, Critical, and Fatal. Redgate Monitor exposes three named threshold bands rendered as Blue (Low), Amber (Medium), and Red (High). Informational collapses to Low; Warning maps to Medium; Critical and Fatal both map to High. For wait-time proxy metrics, the recommended starting thresholds are conservative — tune after two weeks of baseline data collection.",
+    "dpaToRg": {
+      "Informational": { "dpaLabel": "Informational", "rgSeverity": "Low",    "rgColor": "Blue",  "rgThresholdLevel": 1 },
+      "Warning":        { "dpaLabel": "Warning",        "rgSeverity": "Medium", "rgColor": "Amber", "rgThresholdLevel": 2 },
+      "Critical":       { "dpaLabel": "Critical",       "rgSeverity": "High",   "rgColor": "Red",   "rgThresholdLevel": 3 },
+      "Fatal":          { "dpaLabel": "Fatal",           "rgSeverity": "High",   "rgColor": "Red",   "rgThresholdLevel": 3 }
+    },
+    "waitTimeProxyNote": "DPA wait time thresholds are expressed in milliseconds of accumulated wait per collection interval. Redgate Monitor custom metrics using sys.dm_os_wait_stats require rate-of-change alerting because the DMV is cumulative. Enable 'Use calculated rate of change' on any wait-stats-based custom metric and set the threshold in ms/interval."
+  },
+
+  "migrationStrategy": {
+    "phases": [
+      {
+        "phase": 1,
+        "name": "Direct Replacements",
+        "description": "DPA alert types with a 1-to-1 built-in Redgate Monitor alert. Enable immediately — no custom metric required.",
+        "matchType": "direct",
+        "conditions": [
+          "CPU Utilization",
+          "Memory Available",
+          "Disk I/O Latency",
+          "Disk Space",
+          "SQL Server Unavailable",
+          "Blocking Wait Time",
+          "Deadlock",
+          "Backup Overdue",
+          "Job Failure",
+          "AG Failover / Cluster Failover",
+          "Long Running Transaction"
+        ]
+      },
+      {
+        "phase": 2,
+        "name": "Partial / Configured Replacements",
+        "description": "Built-in Redgate Monitor alerts that cover the intent of the DPA alert but with reduced fidelity or require supplemental configuration. Notable gaps: DPA's Query Throughput alert uses an ML baseline; Redgate Monitor's equivalent (Dynamic alerts) requires v14+ and learns over 7 days.",
+        "matchType": "partial",
+        "conditions": [
+          "Wait Time Anomaly (ML-based) — maps to Dynamic alerts (v14+)",
+          "Query Throughput Anomaly — maps to Dynamic alerts (v14+)",
+          "Long Running Job — proxy via sysjobactivity custom metric",
+          "AG Replica Synchronization — built-in partial coverage",
+          "Database Mirroring Status — built-in partial coverage",
+          "Error Log Alert — SQL Server log entry alert with pattern matching",
+          "Parameter / Configuration Change — SQL Server log entry alert",
+          "Windows Service Not Running — no dedicated alert; proxy via SQL Server unavailable + error log"
+        ]
+      },
+      {
+        "phase": 3,
+        "name": "Custom Metrics",
+        "description": "No built-in Redgate Monitor equivalent. Build a Custom Metric using the provided T-SQL for each alert type. For wait-time proxy metrics, enable 'Use calculated rate of change' and set collection frequency to 1 minute for responsive alerting.",
+        "matchType": "custom",
+        "consolidationHints": [
+          { "group": "Wait Time Proxies",        "combinedMetric": "sys.dm_os_wait_stats rate-of-change (split by wait category)", "conditions": ["Total Instance Wait Time", "CPU Signal Wait", "Network I/O Wait", "Physical I/O Wait", "Memory Wait", "Log Write Wait"] },
+          { "group": "Per-Dimension Wait Proxies","combinedMetric": "sys.dm_exec_sessions + sys.dm_exec_requests + sys.dm_os_waiting_tasks snapshot", "conditions": ["Wait Time Per Program", "Wait Time Per User", "Wait Time Per Database", "Wait Time Per Client Machine", "Custom Wait Combination"] },
+          { "group": "Session and Capacity",      "combinedMetric": "sys.dm_exec_sessions composite", "conditions": ["Active Sessions", "Active Connections", "TempDB Session Space"] },
+          { "group": "Database Health",           "combinedMetric": "sys.master_files + sys.databases + DBCC SQLPERF", "conditions": ["Database Freespace Low", "Transaction Log Freespace Low", "High VLF Count"] },
+          { "group": "OS Resource Proxies",       "combinedMetric": "sys.dm_os_schedulers + sys.dm_os_process_memory", "conditions": ["OS Disk Queue Length", "OS CPU Queue Length", "Memory Paging Rate"] },
+          { "group": "Maintenance Health",        "combinedMetric": "msdb.dbo + sys.dm_db_stats_properties", "conditions": ["Ineffective Statistics", "Long Running Job"] }
+        ]
+      },
+      {
+        "phase": 4,
+        "name": "Not Available — Decommission or Replace",
+        "description": "DPA alert types that depend on DPA's own repository database, its ML anomaly model, JDBC round-trip probing, or internal DPA health telemetry. None of these are replicable in Redgate Monitor via T-SQL.",
+        "matchType": "none",
+        "alternatives": [
+          { "condition": "DPA Monitor Error",              "alternative": "Redgate Monitor has built-in agent health monitoring. Monitor the Redgate Monitor Base Monitor service and check the Redgate Monitor health dashboard." },
+          { "condition": "DPA Resource Collection Error", "alternative": "No equivalent — these are DPA's internal collection failure alerts. Use Redgate Monitor's built-in 'SQL Server unavailable' alert as a partial substitute for connectivity failures." },
+          { "condition": "Round-trip Time Probe",         "alternative": "DPA's JDBC round-trip probe measures end-to-end query latency from the DPA collector host. Use a custom metric with a lightweight dummy query (SELECT 1) and alert on elapsed time via Extended Events or application-side monitoring." }
+        ]
+      }
+    ]
+  },
+
+  "conditions": [
+
+    {
+      "id": "DPA-ADV-001",
+      "dpaAlertName": "Total Instance Wait Time",
+      "dpaCategory": "Wait Time",
+      "dpaAlertType": "Performance",
+      "dpaDataSource": "DPA Repository (sampled from sys.dm_os_waiting_tasks every 1 second)",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Wait Time",
+      "matchType": "custom",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "customMetricName": "Total Wait Time Rate (ms/min)",
+      "customMetricSQL": "SELECT SUM(wait_time_ms) AS TotalWaitTimeMs FROM sys.dm_os_wait_stats WHERE wait_type NOT IN ('SLEEP_TASK','BROKER_TO_FLUSH','BROKER_TASK_STOP','CLR_AUTO_EVENT','DISPATCHER_QUEUE_SEMAPHORE','DBMIRROR_EVENTS_QUEUED','SQLTRACE_BUFFER_FLUSH','CHECKPOINT_QUEUE','REQUEST_FOR_DEADLOCK_SEARCH','XE_TIMER_EVENT','LOGMGR_QUEUE','ONDEMAND_TASK_QUEUE','SERVER_IDLE_CHECK','HADR_FILESTREAM_IOMGR_IOCOMPLETION','XE_DISPATCHER_WAIT','FT_IFTS_SCHEDULER_IDLE_WAIT','WAIT_XTP_OFFLINE_CKPT_NEW_LOG','BROKER_EVENTHANDLER','RESOURCE_QUEUE','SERVER_IDLE_CHECK','SLEEP_DBSTARTUP','SLEEP_DCOMSTARTUP','SLEEP_MASTERMDREADY','SLEEP_MASTERUPGRADED','SLEEP_MSDBSTARTUP','SLEEP_SYSTEMTASK','SLEEP_TEMPDBSTARTUP','SNI_HTTP_ACCEPT','SP_SERVER_DIAGNOSTICS_SLEEP','SQLTRACE_INCREMENTAL_FLUSH_SLEEP','WAITFOR','XE_DISPATCHER_JOIN','XE_DISPATCHER_WAIT')",
+      "customMetricConfig": {
+        "collectionFrequency": "1 minute",
+        "databasesToCollectFrom": "master",
+        "useRateOfChange": true
+      },
+      "customMetricThreshold": "Alert when rate of change (ms/min) exceeds your established baseline. Suggested starting point: Medium=50000 ms/min, High=200000 ms/min. Tune after 2 weeks of data.",
+      "migrationNote": "DPA accumulates wait time with 1-second granularity in its repository. This proxy uses sys.dm_os_wait_stats (cumulative) with rate-of-change alerting. Idle waits (background tasks) are excluded. The value will be higher than DPA's because DPA excludes benign system wait types automatically.",
+      "simplificationStrategy": "Consolidate into 'Wait Time Proxies' custom metric group. Use rate-of-change alerting."
+    },
+
+    {
+      "id": "DPA-ADV-002",
+      "dpaAlertName": "Wait Time Anomaly",
+      "dpaCategory": "Wait Time",
+      "dpaAlertType": "Anomaly Detection",
+      "dpaDataSource": "DPA ML model (90-day baseline, wait time history in DPA repository)",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Dynamic alerts — Waits",
+      "rgCategory": "Wait Time",
+      "matchType": "partial",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "migrationNote": "DPA's Wait Time Anomaly uses a machine-learning model trained on 90 days of per-wait-type history. Redgate Monitor v14+ includes Dynamic alerts (ML-powered), which learn over a 7-day window and alert on statistical deviations. The RG equivalent covers the spirit but requires v14+ and a 7-day warm-up period before it is reliable. Redgate Monitor's Dynamic alerts operate at the query level rather than the wait-type level.",
+      "simplificationStrategy": "Enable Dynamic alerts in Redgate Monitor v14+. Supplement with the Total Instance Wait Time custom metric (DPA-ADV-001) with a conservative static threshold as a fallback during the warm-up period.",
+      "rgVersionRequirement": "Redgate Monitor v14+"
+    },
+
+    {
+      "id": "DPA-ADV-003",
+      "dpaAlertName": "SQL Statement Wait Time",
+      "dpaCategory": "Wait Time",
+      "dpaAlertType": "Performance",
+      "dpaDataSource": "DPA Repository (per-query wait aggregation via plan handle)",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Long running query",
+      "rgCategory": "Wait Time",
+      "matchType": "partial",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "migrationNote": "DPA surfaces the total accumulated wait time for a specific SQL statement over a time window using its repository. Redgate Monitor's Long running query alert fires on elapsed execution time (not wait time). The alert intent is the same — catching expensive queries — but the metric differs. Supplement with a custom metric on sys.dm_exec_query_stats for cumulative wait time per query.",
+      "simplificationStrategy": "Use Long running query alert for immediate coverage. Add custom metric on sys.dm_exec_query_stats.total_elapsed_time / execution_count for top-N worst queries."
+    },
+
+    {
+      "id": "DPA-ADV-004",
+      "dpaAlertName": "Blocking Wait Time (Lock Wait)",
+      "dpaCategory": "Wait Time",
+      "dpaAlertType": "Performance",
+      "dpaDataSource": "sys.dm_os_waiting_tasks (sampled every 1 second, filtered to LCK_* waits)",
+      "dpaDefaultSeverity": "Critical",
+      "rgAlertTypeId": "Blocking processes",
+      "rgCategory": "Administrative",
+      "matchType": "direct",
+      "recommendedRgSeverity": "High",
+      "rgColor": "Red",
+      "availableInRG": true,
+      "migrationNote": "DPA reports accumulated lock wait time. Redgate Monitor's Blocking processes alert fires when a head-blocker has been waiting longer than the configured threshold (seconds). The RG alert detects the same root condition — sessions blocked on lock waits. Recommended: Low=30s, Medium=60s, High=120s.",
+      "simplificationStrategy": "Direct replacement. Set head-blocker wait time thresholds to match your DPA lock-wait alert thresholds (converting ms to seconds)."
+    },
+
+    {
+      "id": "DPA-ADV-005",
+      "dpaAlertName": "Network I/O Wait Time",
+      "dpaCategory": "Wait Time",
+      "dpaAlertType": "Performance",
+      "dpaDataSource": "DPA Repository (ASYNC_NETWORK_IO, NET_WAITFOR_PACKET wait types from sys.dm_os_waiting_tasks)",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Wait Time",
+      "matchType": "custom",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "customMetricName": "Network I/O Wait Rate (ms/min)",
+      "customMetricSQL": "SELECT SUM(wait_time_ms) AS NetworkWaitMs FROM sys.dm_os_wait_stats WHERE wait_type IN ('ASYNC_NETWORK_IO','NET_WAITFOR_PACKET','NETWORK_IO')",
+      "customMetricConfig": {
+        "collectionFrequency": "1 minute",
+        "databasesToCollectFrom": "master",
+        "useRateOfChange": true
+      },
+      "customMetricThreshold": "Alert when rate > 10000 ms/min (Medium) or > 50000 ms/min (High). High network I/O wait indicates the application is not consuming result sets fast enough — check for slow clients or large result set queries.",
+      "migrationNote": "ASYNC_NETWORK_IO waits accumulate when SQL Server has results ready but the client has not consumed them. High values indicate slow clients, missing result set pagination, or network bandwidth saturation.",
+      "simplificationStrategy": "Consolidate into 'Wait Time Proxies' custom metric group."
+    },
+
+    {
+      "id": "DPA-ADV-006",
+      "dpaAlertName": "Physical I/O Wait Time",
+      "dpaCategory": "Wait Time",
+      "dpaAlertType": "Performance",
+      "dpaDataSource": "DPA Repository (PAGEIOLATCH_*, IO_COMPLETION, WRITELOG waits from sys.dm_os_waiting_tasks)",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Wait Time",
+      "matchType": "custom",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "customMetricName": "Physical I/O Wait Rate (ms/min)",
+      "customMetricSQL": "SELECT SUM(wait_time_ms) AS PhysicalIOWaitMs FROM sys.dm_os_wait_stats WHERE wait_type IN ('PAGEIOLATCH_SH','PAGEIOLATCH_EX','PAGEIOLATCH_UP','PAGEIOLATCH_DT','PAGEIOLATCH_NL','IO_COMPLETION','WRITE_COMPLETION','IO_QUEUE_LIMIT','IO_RETRY')",
+      "customMetricConfig": {
+        "collectionFrequency": "1 minute",
+        "databasesToCollectFrom": "master",
+        "useRateOfChange": true
+      },
+      "customMetricThreshold": "Alert when rate > 20000 ms/min (Medium) or > 100000 ms/min (High). High PAGEIOLATCH waits indicate the buffer pool cannot satisfy reads from cache — data pages must be read from disk.",
+      "migrationNote": "PAGEIOLATCH waits are the primary indicator of I/O subsystem pressure. Supplement with the Disk I/O Latency built-in alert for correlated storage-tier diagnosis.",
+      "simplificationStrategy": "Consolidate into 'Wait Time Proxies' custom metric group."
+    },
+
+    {
+      "id": "DPA-ADV-007",
+      "dpaAlertName": "CPU / Signal Wait Time",
+      "dpaCategory": "Wait Time",
+      "dpaAlertType": "Performance",
+      "dpaDataSource": "DPA Repository (signal_wait_time_ms from sys.dm_os_wait_stats aggregation)",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Wait Time",
+      "matchType": "custom",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "customMetricName": "CPU Signal Wait Rate (ms/min)",
+      "customMetricSQL": "SELECT SUM(signal_wait_time_ms) AS CpuSignalWaitMs FROM sys.dm_os_wait_stats WHERE wait_type NOT IN ('SLEEP_TASK','BROKER_TO_FLUSH','BROKER_TASK_STOP','CLR_AUTO_EVENT','DISPATCHER_QUEUE_SEMAPHORE','DBMIRROR_EVENTS_QUEUED','SQLTRACE_BUFFER_FLUSH','CHECKPOINT_QUEUE','REQUEST_FOR_DEADLOCK_SEARCH','XE_TIMER_EVENT','LOGMGR_QUEUE','ONDEMAND_TASK_QUEUE','SERVER_IDLE_CHECK','WAITFOR','XE_DISPATCHER_JOIN')",
+      "customMetricConfig": {
+        "collectionFrequency": "1 minute",
+        "databasesToCollectFrom": "master",
+        "useRateOfChange": true
+      },
+      "customMetricThreshold": "Signal wait as a percentage of total wait > 25% indicates CPU pressure. Alert when signal_wait_rate > 15000 ms/min (Medium) or > 60000 ms/min (High). Pair with the CPU Utilization built-in alert.",
+      "migrationNote": "Signal wait time is the time a thread spent in the runnable queue after its I/O or lock was satisfied but before a CPU core was available. Elevated signal waits with high CPU utilization indicates CPU saturation.",
+      "simplificationStrategy": "Consolidate into 'Wait Time Proxies' custom metric group."
+    },
+
+    {
+      "id": "DPA-ADV-008",
+      "dpaAlertName": "Memory Wait Time",
+      "dpaCategory": "Wait Time",
+      "dpaAlertType": "Performance",
+      "dpaDataSource": "DPA Repository (RESOURCE_SEMAPHORE, CMEMTHREAD, SOS_RESERVEDMEMBLOCKLIST waits)",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Wait Time",
+      "matchType": "custom",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "customMetricName": "Memory Wait Rate (ms/min)",
+      "customMetricSQL": "SELECT SUM(wait_time_ms) AS MemoryWaitMs FROM sys.dm_os_wait_stats WHERE wait_type IN ('RESOURCE_SEMAPHORE','RESOURCE_SEMAPHORE_QUERY_COMPILE','CMEMTHREAD','SOS_RESERVEDMEMBLOCKLIST','MEMORY_ALLOCATION_EXT','RESERVED_MEMORY_ALLOCATION_EXT')",
+      "customMetricConfig": {
+        "collectionFrequency": "1 minute",
+        "databasesToCollectFrom": "master",
+        "useRateOfChange": true
+      },
+      "customMetricThreshold": "Any non-zero RESOURCE_SEMAPHORE rate is significant. Alert when rate > 1000 ms/min (Medium) or > 10000 ms/min (High). Pair with the Memory Grants Pending custom metric from the SS Advisory Conditions set.",
+      "migrationNote": "RESOURCE_SEMAPHORE waits indicate queries are queued waiting for a memory grant — often caused by large sort/hash operations or insufficient max server memory headroom. Supplement with OS memory available built-in alert.",
+      "simplificationStrategy": "Consolidate into 'Wait Time Proxies' custom metric group."
+    },
+
+    {
+      "id": "DPA-ADV-009",
+      "dpaAlertName": "Log Write Wait Time",
+      "dpaCategory": "Wait Time",
+      "dpaAlertType": "Performance",
+      "dpaDataSource": "DPA Repository (WRITELOG wait type from sys.dm_os_waiting_tasks)",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Wait Time",
+      "matchType": "custom",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "customMetricName": "Log Write Wait Rate (ms/min)",
+      "customMetricSQL": "SELECT wait_time_ms AS LogWriteWaitMs FROM sys.dm_os_wait_stats WHERE wait_type = 'WRITELOG'",
+      "customMetricConfig": {
+        "collectionFrequency": "1 minute",
+        "databasesToCollectFrom": "master",
+        "useRateOfChange": true
+      },
+      "customMetricThreshold": "Alert when rate > 5000 ms/min (Medium) or > 30000 ms/min (High). WRITELOG target: < 1 ms average per write on fast storage. Sustained elevation indicates log I/O saturation.",
+      "migrationNote": "WRITELOG is the wait accumulated by log writer flushes. High WRITELOG wait indicates the transaction log I/O subsystem is the bottleneck — check log file placement, RAID configuration, and whether log file VLFs are fragmented.",
+      "simplificationStrategy": "Consolidate into 'Wait Time Proxies' custom metric group. Pair with Disk I/O Latency built-in alert filtered to log files."
+    },
+
+    {
+      "id": "DPA-ADV-010",
+      "dpaAlertName": "Wait Time Per Program",
+      "dpaCategory": "Wait Time",
+      "dpaAlertType": "Performance",
+      "dpaDataSource": "DPA Repository (per-program wait aggregation via sys.dm_exec_sessions.program_name join)",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Wait Time",
+      "matchType": "custom",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "customMetricName": "Max Active Wait Time By Program (ms)",
+      "customMetricSQL": "SELECT MAX(r.wait_time) AS MaxWaitTimeMs FROM sys.dm_exec_sessions s JOIN sys.dm_exec_requests r ON s.session_id = r.session_id WHERE s.is_user_process = 1 AND r.wait_type NOT IN ('','SLEEP_TASK') AND r.wait_time > 0",
+      "customMetricConfig": {
+        "collectionFrequency": "1 minute",
+        "databasesToCollectFrom": "master",
+        "useRateOfChange": false
+      },
+      "customMetricThreshold": "Alert when max wait time for any session > 5000 ms (Medium) or > 30000 ms (High). This is a point-in-time snapshot — per-program breakdown requires the DPA repository. This metric surfaces the worst-case current wait.",
+      "migrationNote": "DPA provides per-program wait time trend analysis using historical repository data. This proxy only shows the current maximum wait across all active user requests — not broken down by application name. For application-specific analysis, supplement with a query to sys.dm_exec_sessions GROUP BY program_name viewed in Redgate Monitor's Activity > Sessions screen.",
+      "simplificationStrategy": "Consolidate into 'Per-Dimension Wait Proxies' group. Acknowledge reduced fidelity vs DPA."
+    },
+
+    {
+      "id": "DPA-ADV-011",
+      "dpaAlertName": "Wait Time Per User",
+      "dpaCategory": "Wait Time",
+      "dpaAlertType": "Performance",
+      "dpaDataSource": "DPA Repository (per-login wait aggregation)",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Wait Time",
+      "matchType": "custom",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "customMetricName": "Max Active Wait Time By User (ms)",
+      "customMetricSQL": "SELECT MAX(r.wait_time) AS MaxUserWaitTimeMs FROM sys.dm_exec_sessions s JOIN sys.dm_exec_requests r ON s.session_id = r.session_id WHERE s.is_user_process = 1 AND r.wait_time > 0 AND s.login_name IS NOT NULL",
+      "customMetricConfig": {
+        "collectionFrequency": "1 minute",
+        "databasesToCollectFrom": "master",
+        "useRateOfChange": false
+      },
+      "customMetricThreshold": "Alert when > 5000 ms (Medium) or > 30000 ms (High). Same caveat as per-program: this is a snapshot, not a per-user aggregation.",
+      "migrationNote": "DPA provides per-login wait analysis over time using its repository. This proxy provides the maximum current wait across all active user sessions. Redgate Monitor's Activity screen shows session details with login names for real-time investigation.",
+      "simplificationStrategy": "Consolidate into 'Per-Dimension Wait Proxies' group."
+    },
+
+    {
+      "id": "DPA-ADV-012",
+      "dpaAlertName": "Wait Time Per Database",
+      "dpaCategory": "Wait Time",
+      "dpaAlertType": "Performance",
+      "dpaDataSource": "DPA Repository (per-database wait aggregation via sys.dm_exec_sessions.database_id join)",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Wait Time",
+      "matchType": "custom",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "customMetricName": "Max Active Wait Time By Database (ms)",
+      "customMetricSQL": "SELECT MAX(r.wait_time) AS MaxDbWaitTimeMs FROM sys.dm_exec_sessions s JOIN sys.dm_exec_requests r ON s.session_id = r.session_id WHERE s.is_user_process = 1 AND r.wait_time > 0 AND r.database_id > 0",
+      "customMetricConfig": {
+        "collectionFrequency": "1 minute",
+        "databasesToCollectFrom": "master",
+        "useRateOfChange": false
+      },
+      "customMetricThreshold": "Alert when > 5000 ms (Medium) or > 30000 ms (High).",
+      "migrationNote": "DPA shows per-database wait trends using its repository. This proxy is a snapshot of current maximum wait. For database-level investigation, Redgate Monitor's Activity > Top Queries screen filters by database.",
+      "simplificationStrategy": "Consolidate into 'Per-Dimension Wait Proxies' group."
+    },
+
+    {
+      "id": "DPA-ADV-013",
+      "dpaAlertName": "Wait Time Per Client Machine",
+      "dpaCategory": "Wait Time",
+      "dpaAlertType": "Performance",
+      "dpaDataSource": "DPA Repository (per-hostname wait aggregation via sys.dm_exec_sessions.host_name)",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Wait Time",
+      "matchType": "custom",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "customMetricName": "Max Active Wait Time By Client Host (ms)",
+      "customMetricSQL": "SELECT MAX(r.wait_time) AS MaxHostWaitTimeMs FROM sys.dm_exec_sessions s JOIN sys.dm_exec_requests r ON s.session_id = r.session_id WHERE s.is_user_process = 1 AND r.wait_time > 0 AND s.host_name IS NOT NULL",
+      "customMetricConfig": {
+        "collectionFrequency": "1 minute",
+        "databasesToCollectFrom": "master",
+        "useRateOfChange": false
+      },
+      "customMetricThreshold": "Alert when > 5000 ms (Medium) or > 30000 ms (High).",
+      "migrationNote": "DPA can identify which client machines are generating the most wait time. This proxy shows maximum current wait — host_name is available in sys.dm_exec_sessions when set by the client application.",
+      "simplificationStrategy": "Consolidate into 'Per-Dimension Wait Proxies' group."
+    },
+
+    {
+      "id": "DPA-ADV-014",
+      "dpaAlertName": "Custom Wait Combination",
+      "dpaCategory": "Wait Time",
+      "dpaAlertType": "Performance",
+      "dpaDataSource": "DPA Repository (user-defined combination of wait types)",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Wait Time",
+      "matchType": "custom",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "customMetricName": "Custom Wait Combination Rate (ms/min)",
+      "customMetricSQL": "SELECT SUM(wait_time_ms) AS CustomWaitCombinationMs FROM sys.dm_os_wait_stats WHERE wait_type IN (/* replace with your specific wait types, e.g.: */ 'LCK_M_S','LCK_M_X','LCK_M_U','PAGEIOLATCH_SH','PAGEIOLATCH_EX')",
+      "customMetricConfig": {
+        "collectionFrequency": "1 minute",
+        "databasesToCollectFrom": "master",
+        "useRateOfChange": true
+      },
+      "customMetricThreshold": "Set based on the specific wait types selected. Update the IN clause to match the exact wait types from your DPA custom wait combination definition.",
+      "migrationNote": "DPA allows users to create custom wait combinations for application-specific wait categories. In Redgate Monitor, create a separate custom metric for each combination, replacing the IN list with the wait types from your DPA alert definition.",
+      "simplificationStrategy": "Create one custom metric per DPA custom wait combination definition."
+    },
+
+    {
+      "id": "DPA-ADV-015",
+      "dpaAlertName": "CPU Utilization",
+      "dpaCategory": "Resources",
+      "dpaAlertType": "Performance",
+      "dpaDataSource": "WMI / OS performance counters (Processor: % Processor Time)",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Processor (CPU) utilization",
+      "rgCategory": "Resources",
+      "matchType": "direct",
+      "recommendedRgSeverity": "High",
+      "rgColor": "Red",
+      "availableInRG": true,
+      "migrationNote": "Machine-level CPU threshold. Enable in Redgate Monitor > Alert Settings > Resources > CPU. Recommended: Low=70%, Medium=85%, High=95%.",
+      "simplificationStrategy": "Direct replacement. Disable DPA CPU alert after RG alert is validated."
+    },
+
+    {
+      "id": "DPA-ADV-016",
+      "dpaAlertName": "Memory Available",
+      "dpaCategory": "Resources",
+      "dpaAlertType": "Performance",
+      "dpaDataSource": "WMI / OS performance counters (Memory: Available Bytes)",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "OS memory available",
+      "rgCategory": "Resources",
+      "matchType": "direct",
+      "recommendedRgSeverity": "High",
+      "rgColor": "Red",
+      "availableInRG": true,
+      "migrationNote": "Machine-level available RAM threshold. Maps directly to Redgate Monitor 'OS memory available' alert. Set threshold in MB — convert DPA's percentage threshold: threshold_MB = total_RAM_MB × (1 − DPA_pct/100).",
+      "simplificationStrategy": "Direct replacement. Note threshold unit difference: DPA uses percentage, Redgate Monitor uses MB available."
+    },
+
+    {
+      "id": "DPA-ADV-017",
+      "dpaAlertName": "Disk I/O Latency",
+      "dpaCategory": "Resources",
+      "dpaAlertType": "Performance",
+      "dpaDataSource": "WMI / OS performance counters (PhysicalDisk: Avg. Disk sec/Read, Avg. Disk sec/Write)",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Disk space / avg read-write time",
+      "rgCategory": "Resources",
+      "matchType": "direct",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "migrationNote": "Latency benchmarks: <10ms=fast, 10–20ms=acceptable, 20–50ms=slow, >50ms=critical. Transaction log target: <2ms. DPA reports in ms; Redgate Monitor alert uses ms. Thresholds are directly transferable.",
+      "simplificationStrategy": "Direct replacement. Transfer DPA latency thresholds directly."
+    },
+
+    {
+      "id": "DPA-ADV-018",
+      "dpaAlertName": "Disk Space",
+      "dpaCategory": "Resources",
+      "dpaAlertType": "Storage",
+      "dpaDataSource": "WMI / Win32_LogicalDisk (FreeSpace, Size)",
+      "dpaDefaultSeverity": "Critical",
+      "rgAlertTypeId": "Disk space",
+      "rgCategory": "Administrative",
+      "matchType": "direct",
+      "recommendedRgSeverity": "High",
+      "rgColor": "Red",
+      "availableInRG": true,
+      "migrationNote": "OS-level disk space alert. Redgate Monitor uses 'Disk Used %' — convert DPA's 'free space %' threshold: RG threshold = 100 − DPA_free_pct. E.g., DPA alert at <10% free → RG alert at >90% used.",
+      "simplificationStrategy": "Direct replacement. Convert threshold from 'free %' to 'used %'."
+    },
+
+    {
+      "id": "DPA-ADV-019",
+      "dpaAlertName": "TempDB Space Used",
+      "dpaCategory": "Resources",
+      "dpaAlertType": "Performance",
+      "dpaDataSource": "T-SQL (tempdb.sys.dm_db_file_space_usage)",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Resources",
+      "matchType": "custom",
+      "recommendedRgSeverity": "High",
+      "rgColor": "Red",
+      "availableInRG": true,
+      "customMetricName": "TempDB Space Used %",
+      "customMetricSQL": "SELECT CAST(SUM(internal_object_reserved_page_count + user_object_reserved_page_count + version_store_reserved_page_count) AS FLOAT) / NULLIF(SUM(total_page_count), 0) * 100.0 AS TempDBSpaceUsedPct FROM tempdb.sys.dm_db_file_space_usage",
+      "customMetricConfig": {
+        "collectionFrequency": "5 minutes",
+        "databasesToCollectFrom": "master",
+        "useRateOfChange": false
+      },
+      "customMetricThreshold": "Alert when TempDB space used % > 70 (Medium) or > 90 (High). Sustained high usage indicates runaway queries, large sorts, or version store growth under snapshot isolation.",
+      "migrationNote": "DPA monitors TempDB allocation units. This proxy calculates the percentage of allocated pages that are in use across all TempDB allocation types. Supplement with Total TempDB size monitoring via sys.master_files.",
+      "simplificationStrategy": "Consolidate into 'Session and Capacity' custom metric group."
+    },
+
+    {
+      "id": "DPA-ADV-020",
+      "dpaAlertName": "Active Sessions",
+      "dpaCategory": "Resources",
+      "dpaAlertType": "Performance",
+      "dpaDataSource": "T-SQL (sys.dm_exec_sessions)",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Resources",
+      "matchType": "custom",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "customMetricName": "Active User Session Count",
+      "customMetricSQL": "SELECT COUNT(*) AS ActiveUserSessions FROM sys.dm_exec_sessions WHERE is_user_process = 1 AND status IN ('running','suspended','preconnect')",
+      "customMetricConfig": {
+        "collectionFrequency": "2 minutes",
+        "databasesToCollectFrom": "master",
+        "useRateOfChange": false
+      },
+      "customMetricThreshold": "Alert based on your known application workload peak. Suggested: Medium = 80% of typical peak, High = 120% of typical peak (connection pool exhaustion risk).",
+      "migrationNote": "DPA counts active (non-sleeping) sessions. This proxy filters to running, suspended, or preconnect sessions — excluding sleeping/idle sessions. Sleeping sessions with open transactions are a separate concern (see Long Running Transaction alert).",
+      "simplificationStrategy": "Consolidate into 'Session and Capacity' custom metric group."
+    },
+
+    {
+      "id": "DPA-ADV-021",
+      "dpaAlertName": "Active Connections",
+      "dpaCategory": "Resources",
+      "dpaAlertType": "Performance",
+      "dpaDataSource": "T-SQL (sys.dm_exec_sessions)",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Resources",
+      "matchType": "custom",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "customMetricName": "Total User Connection Count",
+      "customMetricSQL": "SELECT COUNT(*) AS TotalUserConnections FROM sys.dm_exec_sessions WHERE is_user_process = 1",
+      "customMetricConfig": {
+        "collectionFrequency": "2 minutes",
+        "databasesToCollectFrom": "master",
+        "useRateOfChange": false
+      },
+      "customMetricThreshold": "Alert when approaching max connections: SELECT value_in_use FROM sys.configurations WHERE name = 'max connections'. Suggested: Medium=80% of max, High=95% of max.",
+      "migrationNote": "Total connections (including sleeping/idle) reflects connection pool utilization. Compare against max connections setting. Alert at 80% to give lead time before pool exhaustion.",
+      "simplificationStrategy": "Consolidate into 'Session and Capacity' custom metric group."
+    },
+
+    {
+      "id": "DPA-ADV-022",
+      "dpaAlertName": "Query Throughput Anomaly",
+      "dpaCategory": "Resources",
+      "dpaAlertType": "Anomaly Detection",
+      "dpaDataSource": "DPA Repository (batch request rate compared against ML baseline)",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Dynamic alerts — Query throughput",
+      "rgCategory": "Resources",
+      "matchType": "partial",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "migrationNote": "DPA's query throughput alert detects statistically anomalous drops or spikes in batch request rate using its ML baseline. Redgate Monitor v14+ includes a Dynamic alerts feature that detects query throughput anomalies using a 7-day learning window. The RG equivalent requires v14+ and a warm-up period. As a static fallback, use a custom metric on Batch Requests/sec.",
+      "simplificationStrategy": "Enable Dynamic alerts (v14+). Fallback: custom metric on sys.dm_os_performance_counters counter_name='Batch Requests/sec' with rate-of-change alerting.",
+      "rgVersionRequirement": "Redgate Monitor v14+"
+    },
+
+    {
+      "id": "DPA-ADV-023",
+      "dpaAlertName": "OS Disk Queue Length",
+      "dpaCategory": "Resources",
+      "dpaAlertType": "Performance",
+      "dpaDataSource": "WMI / OS performance counters (PhysicalDisk: Avg. Disk Queue Length)",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Resources",
+      "matchType": "custom",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "customMetricName": "Average I/O Stall (ms) — Disk Queue Proxy",
+      "customMetricSQL": "SELECT SUM(io_stall) / NULLIF(SUM(num_of_reads + num_of_writes), 0) AS AvgIOStallMs FROM sys.dm_io_virtual_file_stats(NULL, NULL)",
+      "customMetricConfig": {
+        "collectionFrequency": "2 minutes",
+        "databasesToCollectFrom": "master",
+        "useRateOfChange": false
+      },
+      "customMetricThreshold": "Alert when AvgIOStallMs > 20 ms (Medium) or > 50 ms (High). This is a SQL-level proxy — actual OS disk queue length requires WMI. Redgate Monitor's built-in Disk I/O Latency alert covers the same root condition.",
+      "migrationNote": "OS disk queue length is a WMI counter not accessible via T-SQL. Average I/O stall from sys.dm_io_virtual_file_stats is the best available SQL-side proxy. Supplement with Redgate Monitor's WMI-collected Activity graph which surfaces disk queue length.",
+      "simplificationStrategy": "Consolidate into 'OS Resource Proxies' group. Pair with Disk I/O Latency built-in alert."
+    },
+
+    {
+      "id": "DPA-ADV-024",
+      "dpaAlertName": "OS CPU Queue Length",
+      "dpaCategory": "Resources",
+      "dpaAlertType": "Performance",
+      "dpaDataSource": "WMI / OS performance counters (System: Processor Queue Length)",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Resources",
+      "matchType": "custom",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "customMetricName": "Average Runnable Tasks Count — CPU Queue Proxy",
+      "customMetricSQL": "SELECT AVG(runnable_tasks_count) AS AvgRunnableTasksCount FROM sys.dm_os_schedulers WITH (NOLOCK) WHERE [status] = N'VISIBLE ONLINE'",
+      "customMetricConfig": {
+        "collectionFrequency": "1 minute",
+        "databasesToCollectFrom": "master",
+        "useRateOfChange": false
+      },
+      "customMetricThreshold": "Alert when AvgRunnableTasksCount > 5 (Medium) or > 10 (High). OS processor queue > 2 per CPU core is the standard WMI threshold — this SQL proxy correlates with that condition.",
+      "migrationNote": "OS processor queue length is a WMI counter. sys.dm_os_schedulers.runnable_tasks_count is the SQL-level equivalent showing threads ready to run but waiting for a scheduler. Pair with the CPU Utilization built-in alert.",
+      "simplificationStrategy": "Consolidate into 'OS Resource Proxies' group."
+    },
+
+    {
+      "id": "DPA-ADV-025",
+      "dpaAlertName": "Memory Paging Rate",
+      "dpaCategory": "Resources",
+      "dpaAlertType": "Performance",
+      "dpaDataSource": "WMI / OS performance counters (Memory: Pages/sec)",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Resources",
+      "matchType": "custom",
+      "recommendedRgSeverity": "High",
+      "rgColor": "Red",
+      "availableInRG": true,
+      "customMetricName": "Page Fault Count Rate — Memory Paging Proxy",
+      "customMetricSQL": "SELECT page_fault_count AS PageFaultCount FROM sys.dm_os_process_memory",
+      "customMetricConfig": {
+        "collectionFrequency": "2 minutes",
+        "databasesToCollectFrom": "master",
+        "useRateOfChange": true
+      },
+      "customMetricThreshold": "Alert when rate of change (faults/interval) > 1000 (Medium) or > 10000 (High). Sustained page faults on the SQL Server process indicate memory pressure — check Lock Pages in Memory (LPIM) configuration.",
+      "migrationNote": "OS memory paging rate (Pages/sec) is a WMI counter. sys.dm_os_process_memory.page_fault_count is the cumulative SQL process-level page fault counter — a correlated but not identical measure. Pair with OS memory available built-in alert.",
+      "simplificationStrategy": "Consolidate into 'OS Resource Proxies' group."
+    },
+
+    {
+      "id": "DPA-ADV-026",
+      "dpaAlertName": "SQL Server Unavailable",
+      "dpaCategory": "Administrative",
+      "dpaAlertType": "Availability",
+      "dpaDataSource": "JDBC connection probe (DPA collector attempts connection every collection interval)",
+      "dpaDefaultSeverity": "Fatal",
+      "rgAlertTypeId": "SQL Server unavailable",
+      "rgCategory": "Administrative",
+      "matchType": "direct",
+      "recommendedRgSeverity": "High",
+      "rgColor": "Red",
+      "availableInRG": true,
+      "migrationNote": "Instance connectivity check. Built in to Redgate Monitor — always enabled, cannot be disabled. Redgate Monitor checks connectivity at the monitoring agent's collection cycle.",
+      "simplificationStrategy": "Direct replacement. No configuration required."
+    },
+
+    {
+      "id": "DPA-ADV-027",
+      "dpaAlertName": "Database Unavailable / Offline",
+      "dpaCategory": "Administrative",
+      "dpaAlertType": "Availability",
+      "dpaDataSource": "T-SQL (sys.databases WHERE state_desc != 'ONLINE')",
+      "dpaDefaultSeverity": "Critical",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Administrative",
+      "matchType": "custom",
+      "recommendedRgSeverity": "High",
+      "rgColor": "Red",
+      "availableInRG": true,
+      "customMetricName": "Offline Database Count",
+      "customMetricSQL": "SELECT COUNT(*) AS OfflineDatabases FROM sys.databases WHERE state_desc NOT IN ('ONLINE','RESTORING') AND database_id > 4",
+      "customMetricConfig": {
+        "collectionFrequency": "5 minutes",
+        "databasesToCollectFrom": "master",
+        "useRateOfChange": false
+      },
+      "customMetricThreshold": "Alert immediately when > 0. Any user database not online (excluding system databases 1-4) should trigger an alert.",
+      "migrationNote": "Redgate Monitor monitors instance-level availability but does not have a built-in per-database availability alert. This custom metric catches databases in OFFLINE, SUSPECT, RECOVERY_PENDING, EMERGENCY, or DEFUNCT states. The RESTORING exclusion prevents false positives during planned log shipping or database restores.",
+      "simplificationStrategy": "Standalone custom metric. High severity — any value > 0 is an incident."
+    },
+
+    {
+      "id": "DPA-ADV-028",
+      "dpaAlertName": "Database Freespace Low",
+      "dpaCategory": "Administrative",
+      "dpaAlertType": "Storage",
+      "dpaDataSource": "T-SQL (sys.master_files + sys.dm_os_volume_stats)",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Administrative",
+      "matchType": "custom",
+      "recommendedRgSeverity": "High",
+      "rgColor": "Red",
+      "availableInRG": true,
+      "customMetricName": "Databases With Low Free Space Count",
+      "customMetricSQL": "SELECT COUNT(*) AS DbsWithLowFreeSpace FROM (SELECT d.name, SUM(CAST(mf.size AS BIGINT)) * 8192 AS total_bytes, SUM(CASE WHEN mf.max_size = -1 THEN vs.available_bytes WHEN mf.max_size > mf.size THEN CAST(mf.max_size - mf.size AS BIGINT) * 8192 ELSE 0 END) AS free_bytes FROM sys.master_files mf JOIN sys.databases d ON mf.database_id = d.database_id CROSS APPLY sys.dm_os_volume_stats(mf.database_id, mf.file_id) vs WHERE mf.type_desc = N'ROWS' AND d.state_desc = N'ONLINE' GROUP BY d.name) AS db_space WHERE total_bytes > 0 AND CAST(free_bytes AS FLOAT) / total_bytes < 0.10",
+      "customMetricConfig": {
+        "collectionFrequency": "15 minutes",
+        "databasesToCollectFrom": "master",
+        "useRateOfChange": false
+      },
+      "customMetricThreshold": "Alert when > 0 (High) — any database with < 10% free space. Adjust the 0.10 threshold in the SQL to match your DPA alert configuration.",
+      "migrationNote": "DPA's database freespace alert monitors data file allocation relative to their maximum size and disk volume capacity. This proxy identifies databases where remaining capacity (up to max_size or volume free space) is below 10% of current allocated size.",
+      "simplificationStrategy": "Standalone custom metric. Combine with Disk Space built-in alert for full coverage."
+    },
+
+    {
+      "id": "DPA-ADV-029",
+      "dpaAlertName": "Transaction Log Freespace Low",
+      "dpaCategory": "Administrative",
+      "dpaAlertType": "Storage",
+      "dpaDataSource": "T-SQL (sys.master_files + DBCC SQLPERF(LOGSPACE))",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Administrative",
+      "matchType": "custom",
+      "recommendedRgSeverity": "High",
+      "rgColor": "Red",
+      "availableInRG": true,
+      "customMetricName": "Max Log Space Used %",
+      "customMetricSQL": "CREATE TABLE #logspace (db_name NVARCHAR(256), log_size_mb FLOAT, log_used_pct FLOAT, status INT); INSERT INTO #logspace EXEC ('DBCC SQLPERF(LOGSPACE) WITH NO_INFOMSGS'); SELECT ISNULL(MAX(log_used_pct), 0) AS MaxLogSpaceUsedPct FROM #logspace WHERE db_name NOT IN ('tempdb'); DROP TABLE #logspace;",
+      "customMetricConfig": {
+        "collectionFrequency": "5 minutes",
+        "databasesToCollectFrom": "master",
+        "useRateOfChange": false
+      },
+      "customMetricThreshold": "Alert when MaxLogSpaceUsedPct > 70 (Medium) or > 90 (High). A log at 100% causes write failures — ensure log backups are running or autogrowth is enabled with sufficient volume space.",
+      "migrationNote": "DBCC SQLPERF(LOGSPACE) returns current log usage percentage for all databases. MaxLogSpaceUsedPct identifies the worst-case database. For per-database alerts, remove the MAX() and GROUP BY db_name — but Redgate Monitor custom metrics must return a single scalar value, so per-database requires separate metrics.",
+      "simplificationStrategy": "Standalone custom metric. Pair with Transaction Log backup overdue alert."
+    },
+
+    {
+      "id": "DPA-ADV-030",
+      "dpaAlertName": "Backup Overdue",
+      "dpaCategory": "Administrative",
+      "dpaAlertType": "Maintenance",
+      "dpaDataSource": "T-SQL (msdb.dbo.backupset backup_finish_date)",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Backup overdue",
+      "rgCategory": "Administrative",
+      "matchType": "direct",
+      "recommendedRgSeverity": "High",
+      "rgColor": "Red",
+      "availableInRG": true,
+      "migrationNote": "Reads msdb.dbo.backupset for last backup time per database. DPA alerts in hours; Redgate Monitor also uses hours. Configure separate thresholds for FULL, DIFFERENTIAL, and LOG backup types.",
+      "simplificationStrategy": "Direct replacement. Transfer DPA backup interval thresholds directly."
+    },
+
+    {
+      "id": "DPA-ADV-031",
+      "dpaAlertName": "SQL Agent Job Failure",
+      "dpaCategory": "Administrative",
+      "dpaAlertType": "Maintenance",
+      "dpaDataSource": "T-SQL (msdb.dbo.sysjobhistory run_status = 0)",
+      "dpaDefaultSeverity": "Critical",
+      "rgAlertTypeId": "Job failing",
+      "rgCategory": "Administrative",
+      "matchType": "direct",
+      "recommendedRgSeverity": "High",
+      "rgColor": "Red",
+      "availableInRG": true,
+      "migrationNote": "Reads msdb.dbo.sysjobhistory for run_status = 0 (failed). Direct replacement — Redgate Monitor's job failure alert checks the same table.",
+      "simplificationStrategy": "Direct replacement."
+    },
+
+    {
+      "id": "DPA-ADV-032",
+      "dpaAlertName": "Long Running SQL Agent Job",
+      "dpaCategory": "Administrative",
+      "dpaAlertType": "Maintenance",
+      "dpaDataSource": "DPA Repository (statistical baseline: mean ± 2 std deviations from 90-day job history)",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Administrative",
+      "matchType": "partial",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "customMetricName": "Max Currently Running Job Duration (minutes)",
+      "customMetricSQL": "SELECT ISNULL(MAX(DATEDIFF(MINUTE, ja.start_execution_date, GETDATE())), 0) AS MaxJobRunMinutes FROM msdb.dbo.sysjobactivity ja JOIN msdb.dbo.sysjobs j ON ja.job_id = j.job_id WHERE ja.start_execution_date IS NOT NULL AND ja.stop_execution_date IS NULL AND j.enabled = 1",
+      "customMetricConfig": {
+        "collectionFrequency": "5 minutes",
+        "databasesToCollectFrom": "master",
+        "useRateOfChange": false
+      },
+      "customMetricThreshold": "Alert when MaxJobRunMinutes > 60 (Medium) or > 120 (High). DPA uses a statistical baseline (mean + 2σ per job). This proxy uses a fixed threshold — tune after reviewing your longest normal job durations.",
+      "migrationNote": "DPA's long-running job alert uses a per-job 90-day statistical baseline. Redgate Monitor has no statistical baseline feature for jobs. This proxy alerts on any job running longer than a fixed threshold. For jobs with highly variable runtimes, create separate custom metrics per job name with appropriate thresholds.",
+      "simplificationStrategy": "Use as a standalone custom metric. Acknowledge reduced fidelity vs DPA's per-job baseline."
+    },
+
+    {
+      "id": "DPA-ADV-033",
+      "dpaAlertName": "Deadlock",
+      "dpaCategory": "Administrative",
+      "dpaAlertType": "Performance",
+      "dpaDataSource": "T-SQL (sys.dm_os_waiting_tasks) + DPA repository deadlock trace",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Deadlock (Extended Events)",
+      "rgCategory": "Administrative",
+      "matchType": "direct",
+      "recommendedRgSeverity": "High",
+      "rgColor": "Red",
+      "availableInRG": true,
+      "migrationNote": "Redgate Monitor captures deadlock graphs via an Extended Events session (system_health or dedicated). Full deadlock XML with victim/participant details is available in the alert. DPA also captures deadlock graphs — the information is equivalent.",
+      "simplificationStrategy": "Direct replacement. Redgate Monitor's deadlock alert captures the full deadlock graph."
+    },
+
+    {
+      "id": "DPA-ADV-034",
+      "dpaAlertName": "Blocking Processes",
+      "dpaCategory": "Administrative",
+      "dpaAlertType": "Performance",
+      "dpaDataSource": "T-SQL (sys.dm_os_waiting_tasks + sys.dm_exec_sessions — head blocker detection)",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Blocking processes",
+      "rgCategory": "Administrative",
+      "matchType": "direct",
+      "recommendedRgSeverity": "High",
+      "rgColor": "Red",
+      "availableInRG": true,
+      "migrationNote": "Head-blocker wait time threshold. Redgate Monitor surfaces a live blocking tree in the Activity screen. Recommended thresholds: Low=30s, Medium=60s, High=120s.",
+      "simplificationStrategy": "Direct replacement. Convert DPA threshold from ms to seconds (÷ 1000)."
+    },
+
+    {
+      "id": "DPA-ADV-035",
+      "dpaAlertName": "AG Failover / Cluster Failover",
+      "dpaCategory": "Administrative",
+      "dpaAlertType": "Availability",
+      "dpaDataSource": "T-SQL (sys.availability_groups + Windows Failover Cluster API)",
+      "dpaDefaultSeverity": "Critical",
+      "rgAlertTypeId": "AG / Cluster failover",
+      "rgCategory": "Administrative",
+      "matchType": "direct",
+      "recommendedRgSeverity": "High",
+      "rgColor": "Red",
+      "availableInRG": true,
+      "migrationNote": "Event alert for availability group and FCI failover topology changes. Redgate Monitor detects AG role changes and cluster failovers. Always enabled in Redgate Monitor when an AG is detected.",
+      "simplificationStrategy": "Direct replacement."
+    },
+
+    {
+      "id": "DPA-ADV-036",
+      "dpaAlertName": "AG Replica Synchronization",
+      "dpaCategory": "Administrative",
+      "dpaAlertType": "Availability",
+      "dpaDataSource": "T-SQL (sys.dm_hadr_database_replica_states)",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Availability group health",
+      "rgCategory": "Administrative",
+      "matchType": "partial",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "migrationNote": "Redgate Monitor has a built-in AG health alert that covers synchronization state and redo/send queue sizes. DPA monitors send/redo queue sizes and synchronization health. The Redgate Monitor equivalent provides the same coverage with configurable queue-size thresholds. Enable under Alert Settings > High Availability.",
+      "simplificationStrategy": "Use Redgate Monitor's built-in AG health alert. Supplement with a custom metric on sys.dm_hadr_database_replica_states for redo/send queue size if precise queue thresholds are needed."
+    },
+
+    {
+      "id": "DPA-ADV-037",
+      "dpaAlertName": "Database Mirroring Status",
+      "dpaCategory": "Administrative",
+      "dpaAlertType": "Availability",
+      "dpaDataSource": "T-SQL (sys.database_mirroring)",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Database mirroring",
+      "rgCategory": "Administrative",
+      "matchType": "partial",
+      "recommendedRgSeverity": "High",
+      "rgColor": "Red",
+      "availableInRG": true,
+      "migrationNote": "Redgate Monitor includes database mirroring status monitoring. Mirroring is deprecated in SQL Server 2012+ (use AG instead). Enable under Alert Settings > High Availability if still in use.",
+      "simplificationStrategy": "Use Redgate Monitor's built-in mirroring alert. Plan migration to Availability Groups."
+    },
+
+    {
+      "id": "DPA-ADV-038",
+      "dpaAlertName": "Error Log Alert",
+      "dpaCategory": "Administrative",
+      "dpaAlertType": "Maintenance",
+      "dpaDataSource": "T-SQL (xp_readerrorlog or sys.dm_exec_instance_xml_metadata)",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "SQL Server log entry",
+      "rgCategory": "Administrative",
+      "matchType": "partial",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "migrationNote": "Redgate Monitor's SQL Server log entry alert monitors the SQL Server error log for configurable text patterns (regex or plain text). Map each DPA error log keyword pattern to a Redgate Monitor log entry alert rule. Multiple patterns can be configured in a single log entry alert.",
+      "simplificationStrategy": "Create one Redgate Monitor SQL Server log entry alert per DPA error log alert. Transfer keyword patterns directly. Use 'contains' matching for simple keywords or regex for complex patterns."
+    },
+
+    {
+      "id": "DPA-ADV-039",
+      "dpaAlertName": "Parameter / Configuration Change",
+      "dpaCategory": "Administrative",
+      "dpaAlertType": "Configuration",
+      "dpaDataSource": "DPA Repository (snapshots of sys.configurations over time)",
+      "dpaDefaultSeverity": "Informational",
+      "rgAlertTypeId": "SQL Server log entry",
+      "rgCategory": "Administrative",
+      "matchType": "partial",
+      "recommendedRgSeverity": "Low",
+      "rgColor": "Blue",
+      "availableInRG": true,
+      "migrationNote": "DPA detects configuration changes by comparing sys.configurations snapshots in its repository. Redgate Monitor can detect configuration changes via the SQL Server log entry alert (sp_configure changes are logged to the error log) or via a custom metric that tracks a configuration value with rate-of-change alerting. For critical settings (MAXDOP, Cost Threshold, max server memory), use individual custom metrics.",
+      "simplificationStrategy": "For critical settings: use custom metrics with rate-of-change alerting (one metric per configuration value). For general detection: configure SQL Server log entry alert to match 'Configuration option .* changed from'."
+    },
+
+    {
+      "id": "DPA-ADV-040",
+      "dpaAlertName": "Windows Service Not Running",
+      "dpaCategory": "Administrative",
+      "dpaAlertType": "Availability",
+      "dpaDataSource": "WMI (Win32_Service)",
+      "dpaDefaultSeverity": "Critical",
+      "rgAlertTypeId": "SQL Server unavailable",
+      "rgCategory": "Administrative",
+      "matchType": "partial",
+      "recommendedRgSeverity": "High",
+      "rgColor": "Red",
+      "availableInRG": true,
+      "migrationNote": "DPA monitors Windows service state via WMI. Redgate Monitor collects WMI data and can detect SQL Server service failures via the SQL Server unavailable alert. For non-SQL Server services (SQL Agent, SSAS, SSIS service), there is no direct built-in alert in Redgate Monitor — use a custom metric via xp_cmdshell (if enabled and appropriate) or configure OS-level service monitoring externally. SQL Agent service failures can be detected via error log alerts.",
+      "simplificationStrategy": "SQL Server service: covered by SQL Server unavailable alert. SQL Agent service: monitor via SQL Server log entry alert for Agent shutdown messages. Other services: requires external WMI monitoring or scripted checks."
+    },
+
+    {
+      "id": "DPA-ADV-041",
+      "dpaAlertName": "High VLF Count",
+      "dpaCategory": "Administrative",
+      "dpaAlertType": "Maintenance",
+      "dpaDataSource": "T-SQL (sys.dm_db_log_info across all databases)",
+      "dpaDefaultSeverity": "Informational",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Administrative",
+      "matchType": "custom",
+      "recommendedRgSeverity": "Low",
+      "rgColor": "Blue",
+      "availableInRG": true,
+      "customMetricName": "Max VLF Count Across All Databases",
+      "customMetricSQL": "SELECT ISNULL(MAX(vlf_count), 0) AS MaxVlfCount FROM (SELECT COUNT(*) AS vlf_count FROM sys.dm_db_log_info(NULL) GROUP BY database_id) AS vlf",
+      "customMetricConfig": {
+        "collectionFrequency": "60 minutes",
+        "databasesToCollectFrom": "master",
+        "useRateOfChange": false
+      },
+      "customMetricThreshold": "Alert when MaxVlfCount > 500 (Low) or > 1000 (Medium). High VLF counts increase recovery time and log backup duration. Remediate by setting appropriate log file initial size and growth increment.",
+      "migrationNote": "sys.dm_db_log_info(NULL) scans VLFs across all databases (SQL Server 2016+). For earlier versions use sys.dm_db_log_info with database-specific calls via sp_executesql.",
+      "simplificationStrategy": "Standalone custom metric. Low severity — advisory condition, not a real-time incident."
+    },
+
+    {
+      "id": "DPA-ADV-042",
+      "dpaAlertName": "Ineffective Statistics",
+      "dpaCategory": "Administrative",
+      "dpaAlertType": "Maintenance",
+      "dpaDataSource": "T-SQL (sys.dm_db_stats_properties across all user databases)",
+      "dpaDefaultSeverity": "Informational",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Administrative",
+      "matchType": "custom",
+      "recommendedRgSeverity": "Low",
+      "rgColor": "Blue",
+      "availableInRG": true,
+      "customMetricName": "Stale Statistics Count (All Databases)",
+      "customMetricSQL": "DECLARE @sql NVARCHAR(MAX) = N''; SELECT @sql = @sql + N' UNION ALL SELECT COUNT(*) FROM ' + QUOTENAME(name) + N'.sys.stats AS s CROSS APPLY ' + QUOTENAME(name) + N'.sys.dm_db_stats_properties(s.object_id, s.stats_id) AS sp WHERE sp.last_updated IS NOT NULL AND sp.rows > 1000 AND sp.modification_counter > sp.rows * 0.20;' FROM sys.databases WHERE state_desc = N'ONLINE' AND database_id > 4; SET @sql = STUFF(@sql, 1, 11, N''); IF @sql IS NULL OR @sql = N'' BEGIN SELECT 0 AS StaleStatsCount; RETURN; END CREATE TABLE #stale (cnt INT); INSERT INTO #stale EXEC sys.sp_executesql @sql; SELECT ISNULL(SUM(cnt), 0) AS StaleStatsCount FROM #stale; DROP TABLE #stale;",
+      "customMetricConfig": {
+        "collectionFrequency": "60 minutes",
+        "databasesToCollectFrom": "master",
+        "useRateOfChange": false
+      },
+      "customMetricThreshold": "Alert when StaleStatsCount > 10 (Low) or > 50 (Medium). Statistics are considered stale when modification_counter exceeds 20% of row count (SQL Server 2014 and earlier used a fixed 20% threshold; 2016+ uses a dynamic threshold but 20% is a reasonable proxy).",
+      "migrationNote": "DPA surfaces tables with stale statistics that are contributing to poor query plans. This proxy counts statistics objects where modifications exceed 20% of row count across all user databases. Schedule regular UPDATE STATISTICS or enable Auto Update Statistics Asynchronously to reduce alert frequency.",
+      "simplificationStrategy": "Consolidate into 'Maintenance Health' custom metric group. Low severity — advisory condition."
+    },
+
+    {
+      "id": "DPA-ADV-043",
+      "dpaAlertName": "Long Running Transaction",
+      "dpaCategory": "Administrative",
+      "dpaAlertType": "Performance",
+      "dpaDataSource": "T-SQL (sys.dm_tran_active_transactions + sys.dm_exec_sessions)",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Long running query",
+      "rgCategory": "Wait Time",
+      "matchType": "direct",
+      "recommendedRgSeverity": "High",
+      "rgColor": "Red",
+      "availableInRG": true,
+      "migrationNote": "Redgate Monitor's Long running query alert fires when any query exceeds the elapsed time threshold. For sleeping sessions with open transactions specifically, supplement with a custom metric: SELECT COUNT(*) FROM sys.dm_exec_sessions s JOIN sys.dm_tran_session_transactions st ON s.session_id = st.session_id WHERE s.status = 'sleeping' AND DATEDIFF(MINUTE, (SELECT transaction_begin_time FROM sys.dm_tran_active_transactions t WHERE t.transaction_id = st.transaction_id), GETDATE()) >= 10.",
+      "simplificationStrategy": "Use Long running query alert for active transactions. Add custom metric for sleeping sessions with open transactions."
+    },
+
+    {
+      "id": "DPA-ADV-044",
+      "dpaAlertName": "Custom SQL Numeric Alert",
+      "dpaCategory": "Custom",
+      "dpaAlertType": "Custom",
+      "dpaDataSource": "T-SQL (user-defined query returning a numeric value)",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Custom",
+      "matchType": "direct",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "migrationNote": "DPA custom numeric alerts run a T-SQL query and compare the result against a threshold. Redgate Monitor custom metrics work identically — the query must return a single numeric scalar. Direct migration: copy the DPA T-SQL query, ensure it returns one row with one numeric column, create as a Redgate Monitor Custom Metric.",
+      "simplificationStrategy": "Direct migration. Copy T-SQL query and threshold values directly."
+    },
+
+    {
+      "id": "DPA-ADV-045",
+      "dpaAlertName": "Custom SQL Boolean Alert",
+      "dpaCategory": "Custom",
+      "dpaAlertType": "Custom",
+      "dpaDataSource": "T-SQL (user-defined query returning 0 or 1)",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Custom",
+      "matchType": "custom",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "customMetricName": "Boolean condition returns 0 (pass) or 1 (fail)",
+      "customMetricSQL": "/* DPA boolean query — wrap in CAST if it returns BIT */ SELECT CAST(/* original DPA boolean expression */ 0 AS INT) AS ConditionResult",
+      "customMetricConfig": {
+        "collectionFrequency": "5 minutes",
+        "databasesToCollectFrom": "master",
+        "useRateOfChange": false
+      },
+      "customMetricThreshold": "Alert when ConditionResult > 0 (any threshold level). Boolean conditions map to threshold > 0 in Redgate Monitor.",
+      "migrationNote": "DPA boolean alerts evaluate a true/false condition. Redgate Monitor custom metrics are numeric only — convert the boolean condition to return 1 (alert) or 0 (no alert) using CASE or CAST. Threshold should be set to alert when value > 0.",
+      "simplificationStrategy": "Convert DPA boolean T-SQL to CASE WHEN <condition> THEN 1 ELSE 0 END. Set threshold > 0 in Redgate Monitor."
+    },
+
+    {
+      "id": "DPA-ADV-046",
+      "dpaAlertName": "Custom Stored Procedure Alert",
+      "dpaCategory": "Custom",
+      "dpaAlertType": "Custom",
+      "dpaDataSource": "T-SQL stored procedure (must return a single numeric result set)",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Custom",
+      "matchType": "partial",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "migrationNote": "DPA can call a stored procedure for custom alerting. Redgate Monitor custom metrics run inline T-SQL — stored procedure calls are supported via EXEC or DECLARE + sp_executesql, but the final SELECT must return a single scalar numeric value. If the stored procedure returns a table, wrap it: CREATE TABLE #r (val INT); INSERT INTO #r EXEC dbo.YourProcedure; SELECT TOP 1 val FROM #r; DROP TABLE #r.",
+      "simplificationStrategy": "Wrap stored procedure call in a scalar-returning inline T-SQL block. Verify the procedure can be executed in the context of the Redgate Monitor service account."
+    },
+
+    {
+      "id": "DPA-ADV-047",
+      "dpaAlertName": "Custom Wait Type Combination",
+      "dpaCategory": "Custom",
+      "dpaAlertType": "Custom",
+      "dpaDataSource": "DPA Repository (user-defined combination of wait types with custom aggregation logic)",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "Custom metric",
+      "rgCategory": "Custom",
+      "matchType": "custom",
+      "recommendedRgSeverity": "Medium",
+      "rgColor": "Amber",
+      "availableInRG": true,
+      "customMetricName": "Custom Wait Combination Rate (ms/min) — replace IN list",
+      "customMetricSQL": "SELECT SUM(wait_time_ms) AS CustomWaitMs FROM sys.dm_os_wait_stats WHERE wait_type IN (/* replace with your DPA wait type list, e.g.: 'LCK_M_S','PAGEIOLATCH_EX' */)",
+      "customMetricConfig": {
+        "collectionFrequency": "1 minute",
+        "databasesToCollectFrom": "master",
+        "useRateOfChange": true
+      },
+      "customMetricThreshold": "Set based on the wait types selected. Use rate-of-change alerting. Threshold in ms/interval.",
+      "migrationNote": "DPA custom wait combinations aggregate user-defined wait type groups from the DPA repository. This proxy uses sys.dm_os_wait_stats with a matching IN list — replace the IN list with the exact wait types from the DPA custom combination definition.",
+      "simplificationStrategy": "Create one custom metric per DPA custom wait combination. Enable rate-of-change alerting."
+    },
+
+    {
+      "id": "DPA-ADV-048",
+      "dpaAlertName": "DPA Monitor Error",
+      "dpaCategory": "DPA Internal",
+      "dpaAlertType": "Self-monitoring",
+      "dpaDataSource": "DPA internal health telemetry (not T-SQL accessible)",
+      "dpaDefaultSeverity": "Critical",
+      "rgAlertTypeId": "NOT AVAILABLE IN REDGATE MONITOR",
+      "rgCategory": "DPA Internal",
+      "matchType": "none",
+      "recommendedRgSeverity": null,
+      "rgColor": null,
+      "availableInRG": false,
+      "migrationNote": "DPA Monitor Errors are DPA self-monitoring alerts that fire when the DPA collector service encounters internal errors (repository write failures, license violations, collection engine crashes). Redgate Monitor has its own built-in agent health monitoring that is always active — there is no equivalent DPA-internal health alert to migrate.",
+      "alternative": "Redgate Monitor monitors its own agent health automatically. Check the Redgate Monitor status page and configure email notifications for Redgate Monitor service alerts via Redgate's support infrastructure."
+    },
+
+    {
+      "id": "DPA-ADV-049",
+      "dpaAlertName": "DPA Resource Collection Error",
+      "dpaCategory": "DPA Internal",
+      "dpaAlertType": "Self-monitoring",
+      "dpaDataSource": "DPA internal health telemetry (collection pipeline errors)",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "NOT AVAILABLE IN REDGATE MONITOR",
+      "rgCategory": "DPA Internal",
+      "matchType": "none",
+      "recommendedRgSeverity": null,
+      "rgColor": null,
+      "availableInRG": false,
+      "migrationNote": "DPA Resource Collection Errors fire when the DPA collector fails to retrieve a specific metric (WMI access denied, DMV permission error, network timeout). Redgate Monitor surfaces collection errors in its own health dashboard. There is no equivalent user-configured alert to migrate — the monitoring system's internal health is managed separately in both tools.",
+      "alternative": "Monitor Redgate Monitor's base monitor health via the built-in health page. Configure SQL Server unavailable alerts as a proxy for connection failures."
+    },
+
+    {
+      "id": "DPA-ADV-050",
+      "dpaAlertName": "Round-trip Time Probe",
+      "dpaCategory": "DPA Internal",
+      "dpaAlertType": "Connectivity Probe",
+      "dpaDataSource": "DPA JDBC connection probe (measures end-to-end latency from DPA collector to SQL Server via JDBC)",
+      "dpaDefaultSeverity": "Warning",
+      "rgAlertTypeId": "NOT AVAILABLE IN REDGATE MONITOR",
+      "rgCategory": "DPA Internal",
+      "matchType": "none",
+      "recommendedRgSeverity": null,
+      "rgColor": null,
+      "availableInRG": false,
+      "migrationNote": "DPA's round-trip time probe measures the elapsed time for a simple JDBC query (SELECT 1) from the DPA collector host to the SQL Server instance. This is a network + driver + SQL Server response latency measurement from a specific network path. Redgate Monitor does not have an equivalent synthetic transaction probe. The SQL Server unavailable alert detects connectivity failures but does not measure latency.",
+      "alternative": "For round-trip latency monitoring: deploy a lightweight synthetic transaction test (e.g., SQL Server connection test via PowerShell or a dedicated monitoring probe). Alternatively, use Extended Events to track server-side latency for a specific login used exclusively for health probing."
+    }
+
+  ]
+}
