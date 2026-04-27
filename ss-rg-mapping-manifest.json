@@ -265,12 +265,12 @@
       "ssDefaultSeverity": 3,
       "rgAlertTypeId": "AG / Cluster failover",
       "rgCategory": "Administrative",
-      "matchType": "direct",
+      "matchType": "partial",
       "recommendedRgSeverity": "High",
       "rgColor": "Red",
       "availableInRG": true,
-      "migrationNote": "Event alert for HA topology changes — failover, role change, replica state.",
-      "simplificationStrategy": "Direct replacement."
+      "migrationNote": "Redgate Monitor's AG / Cluster failover alert covers actual failover events and role changes (primary→secondary) directly. However, mirroring state changes are a partial match only — database mirroring is deprecated since SQL Server 2012 and Redgate Monitor treats these as connectivity events rather than mirroring-specific state transitions. For AG health degradation (replica synchronization, send queue growth, redo queue buildup) use custom metrics on sys.dm_hadr_database_replica_states — these are NOT covered by the AG / Cluster failover alert and must not be confused with topology-change events.",
+      "simplificationStrategy": "Direct replacement for AG failover and Windows cluster role changes. Partial for mirroring (deprecated). Build a separate custom metric for AG sync health — do not rely on the failover alert to detect health degradation."
     },
 
     {
@@ -297,12 +297,12 @@
       "ssDefaultSeverity": 2,
       "rgAlertTypeId": "Long running query",
       "rgCategory": "Wait Time",
-      "matchType": "direct",
+      "matchType": "partial",
       "recommendedRgSeverity": "High",
       "rgColor": "Red",
       "availableInRG": true,
-      "migrationNote": "Open transactions block log truncation, grow tempdb under RCSI, and escalate locks. Also enable the Blocking processes alert for full coverage.",
-      "simplificationStrategy": "Map to Long running query. Pair with Blocking processes alert for context."
+      "migrationNote": "Behavior differs: SQL Sentry alerts on any open transaction regardless of current query activity, including sleeping sessions holding open transactions. Redgate Monitor's Long running query alert requires an active query in the session. Sleeping sessions with open transactions (the most dangerous case) require a custom metric: SELECT s.session_id, DATEDIFF(MINUTE,t.transaction_begin_time,GETDATE()) AS open_minutes FROM sys.dm_exec_sessions s JOIN sys.dm_tran_session_transactions t ON s.session_id=t.session_id WHERE s.status='sleeping' AND DATEDIFF(MINUTE,t.transaction_begin_time,GETDATE()) > 10. Also enable the Blocking processes alert — open transactions prevent log truncation, grow tempdb under RCSI, and escalate locks.",
+      "simplificationStrategy": "Partial replacement via Long running query. Add a custom metric for sleeping sessions with open transactions. Pair with Blocking processes alert."
     },
 
     {

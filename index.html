@@ -326,6 +326,7 @@
   .badge-partial{ background: var(--amber-bg);  color: var(--amber-text);  border: 0.5px solid var(--amber-border); }
   .badge-custom { background: var(--purple-bg); color: var(--purple-text); border: 0.5px solid var(--purple-border); }
   .badge-none   { background: var(--red-bg);    color: var(--red-text);    border: 0.5px solid var(--red-border); }
+  .badge-retire { background: var(--bg3);       color: var(--text3);       border: 0.5px solid var(--border2); }
 
   /* ── Mapping grid ── */
   .map-row { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: center; margin-bottom: 8px; font-size: 12px; }
@@ -454,6 +455,7 @@
   .mgh-partial { background: var(--amber-bg);  color: var(--amber-text);  border: 0.5px solid var(--amber-border); }
   .mgh-custom  { background: var(--purple-bg); color: var(--purple-text); border: 0.5px solid var(--purple-border); }
   .mgh-none    { background: var(--red-bg);    color: var(--red-text);    border: 0.5px solid var(--red-border); }
+  .mgh-retire  { background: var(--bg3);       color: var(--text3);       border: 0.5px solid var(--border2); }
   .match-group-body { padding: 0 2px; }
 
   .alert-card {
@@ -1085,12 +1087,15 @@ const IDERA_TYPE_MAP = [
 
 // ── SQL Sentry Alert type mapping ──────────────────────────────────────────
 const SS_TYPE_MAP = [
-  // ── NOT AVAILABLE — inserted before broad keys so they always win ──────────
-  // These SQL Sentry Advisory conditions have no T-SQL-accessible equivalent
-  {keys:['sentry monitoring service','sql sentry service','monitoring service offline','sqlsentry monitoring'], rgType:'NOT AVAILABLE IN REDGATE MONITOR', rgCat:'Advisory', match:'none', source:'Custom', note:'SQL Sentry internal monitoring service health — no equivalent in Redgate Monitor. Use Redgate Monitor built-in health checks instead.'},
-  {keys:['same virtual host','replicas on same host','same hyper-v host','same vmware host'],  rgType:'NOT AVAILABLE IN REDGATE MONITOR', rgCat:'Advisory', match:'none', source:'Custom', note:'Requires VMware/Hyper-V host inventory — no T-SQL equivalent. Cannot be replicated in Redgate Monitor.'},
-  {keys:['same datastore','replicas with disks in same','vmware datastore overlap','same vmware datastore'], rgType:'NOT AVAILABLE IN REDGATE MONITOR', rgCat:'Advisory', match:'none', source:'Custom', note:'Requires VMware datastore inventory — no T-SQL equivalent. Cannot be replicated in Redgate Monitor.'},
-  {keys:['high performance power plan not enabled','power plan not enabled'],  rgType:'NOT AVAILABLE IN REDGATE MONITOR', rgCat:'Advisory', match:'none', source:'Custom', note:'Requires WMI to read Windows Power Plan — no T-SQL equivalent. Cannot be replicated in Redgate Monitor. Use OS monitoring or Group Policy auditing instead.'},
+  // ── RETIRE — noise-generating or superseded by Redgate Monitor model ────────
+  // These conditions should NOT be recreated. Redgate Monitor makes them unnecessary or they generate more noise than value.
+  {keys:['sentry monitoring service','sql sentry service','monitoring service offline','sqlsentry monitoring'], rgType:'RETIRE — not recommended to recreate', rgCat:'Advisory', match:'retire', source:'Custom', note:'SQL Sentry internal monitoring service health — Redgate Monitor has built-in agent health monitoring and self-healing. No equivalent needed. Retire this alert.'},
+  {keys:['high performance power plan not enabled','power plan not enabled'],  rgType:'RETIRE — enforce via Group Policy instead', rgCat:'Advisory', match:'retire', source:'Custom', note:'Alerting on power plan configuration is a one-time remediation concern, not an ongoing operational alert. Enforce High Performance power plan via Group Policy (PowerCfg) or DSC across all SQL Server hosts. Retire and do not recreate in Redgate Monitor.'},
+  {keys:['trace flags number turned on changed','trace flags total number','trace flag count changed'], rgType:'RETIRE — manage via change control', rgCat:'Advisory', match:'retire', source:'Custom', note:'Trace flag changes are a change-management concern, not a real-time alerting scenario. Track via CMDB or SQL Server audit. Recreating this alert in Redgate Monitor generates noise without actionable signal in most environments. Retire unless you have a specific compliance requirement.'},
+  {keys:['high active user sessions','active user session count','active sessions high'], rgType:'RETIRE — use dashboard instead', rgCat:'Advisory', match:'retire', source:'Custom', note:'Session count alone is not actionable — high session count can be normal for your workload. Redgate Monitor shows live session data on the Overview dashboard. Alert on impact metrics instead (blocking, CPU, wait time). Retire this alert to reduce noise.'},
+  // ── NOT AVAILABLE — no T-SQL equivalent, cannot be replicated ───────────────
+  {keys:['same virtual host','replicas on same host','same hyper-v host','same vmware host'],  rgType:'NOT AVAILABLE IN REDGATE MONITOR', rgCat:'Advisory', match:'none', source:'Custom', note:'Requires VMware/Hyper-V host inventory — no T-SQL equivalent. Cannot be replicated in Redgate Monitor. Enforce via hypervisor anti-affinity rules instead.'},
+  {keys:['same datastore','replicas with disks in same','vmware datastore overlap','same vmware datastore'], rgType:'NOT AVAILABLE IN REDGATE MONITOR', rgCat:'Advisory', match:'none', source:'Custom', note:'Requires VMware datastore inventory — no T-SQL equivalent. Cannot be replicated in Redgate Monitor. Enforce via VMware datastore anti-affinity rules.'},
   // Resources
   {keys:['cpu','processor','high cpu','cpu usage','cpu utilization'],    rgType:'Processor (CPU) utilization',       rgCat:'Resources',     match:'direct',  source:'PerformanceDegradation', note:'Machine-level CPU threshold alert'},
   {keys:['memory','ram','memory exhaustion','memory pressure','available memory'], rgType:'OS memory available', rgCat:'Resources', match:'direct', source:'PerformanceDegradation', note:'Machine-level memory threshold'},
@@ -1106,19 +1111,25 @@ const SS_TYPE_MAP = [
   {keys:['blocking','blocked','block','head blocker'],                   rgType:'Blocking processes',                rgCat:'Administrative',match:'direct',  source:'Custom',                 note:'Head-blocker wait time threshold'},
   {keys:['deadlock'],                                                     rgType:'Deadlock (Extended Events)',        rgCat:'Administrative',match:'direct',  source:'Custom',                 note:'Event alert with deadlock graph'},
   {keys:['backup','backup overdue','backup age','last backup'],          rgType:'Backup overdue',                    rgCat:'Administrative',match:'direct',  source:'Custom',                 note:'Based on backup_finish_date vs interval'},
-  {keys:['job','agent job','sql agent','job failure','job failed','nightly'], rgType:'Job failing',                  rgCat:'Administrative',match:'direct',  source:'Custom',                 note:'dbo.sysjobhistory failure detection'},
-  {keys:['disk space','disk','free space','low disk','drive','volume','data file','log file','file growth'], rgType:'Disk space', rgCat:'Administrative', match:'direct', source:'Custom', note:'Machine-level Disk Used % threshold'},
-  {keys:['availability group','ag ','replica','failover','cluster','mirroring','hadr'], rgType:'AG / Cluster failover', rgCat:'Administrative', match:'direct', source:'Custom', note:'Event alert for HA topology changes'},
-  {keys:['failed login','login failure','login failed','failed logins'], rgType:'SQL Server log entry',              rgCat:'Administrative',match:'partial', source:'Custom',                 note:'Monitor SQL error log for authentication failures'},
+  {keys:['agent job','sql agent','job failure','job failed','job failing','job error'], rgType:'Job failing',          rgCat:'Administrative',match:'direct',  source:'Custom',                 note:'dbo.sysjobhistory failure detection. Redgate Monitor checks job run_status on every collection cycle — same semantic as SQL Sentry.'},
+  {keys:['disk space','free space','low disk','drive capacity','volume capacity','disk full'], rgType:'Disk space',   rgCat:'Administrative',match:'direct',  source:'Custom',                 note:'Machine-level Disk Used % threshold. Maps directly to Redgate Monitor Disk space alert.'},
+  {keys:['data file','log file','file growth','autogrow event','filegroup full'], rgType:'SQL Server log entry',     rgCat:'Administrative',match:'partial', source:'Custom',                 note:'File autogrow events are written to the SQL error log but are not discrete alert events in Redgate Monitor. Use SQL Server log entry alert with keyword filter "autogrew" as a partial substitute. For true space forecasting, pair with the Disk space alert and the Auto-Growth custom metric.'},
+  // True failover / role-change events only — do NOT use for health or sync degradation
+  {keys:['ag failover','cluster failover','availability group failover','failover detected','failover event','role change','node failover'], rgType:'AG / Cluster failover', rgCat:'Administrative', match:'direct', source:'Custom', note:'Role change or failover event — maps directly to Redgate Monitor AG / Cluster failover alert. This alert fires on topology changes only, not on health or synchronization degradation.'},
+  // AG / replication health — not a failover event — requires custom DMV monitoring
+  {keys:['availability group','hadr','ag replica','replica sync','replica state','ag health','ag synchron','mirroring state','mirroring partner'], rgType:'Custom metric', rgCat:'Administrative', match:'custom', source:'Custom', note:'AG health or synchronization issue — NOT a failover event. Redgate Monitor has no built-in AG health alert. Monitor via sys.dm_hadr_database_replica_states: SELECT replica_id, synchronization_state_desc, synchronization_health_desc FROM sys.dm_hadr_database_replica_states — alert when synchronization_health_desc <> \'HEALTHY\'.'},
+  {keys:['failed login','login failure','login failed','failed logins'], rgType:'SQL Server log entry',              rgCat:'Administrative',match:'partial', source:'Custom',                 note:'Behavior differs from SQL Sentry: Redgate Monitor uses error log pattern matching (keyword "Login failed") rather than semantic authentication failure detection. No threshold-based rate alerting. Supplement with Extended Events audit session for attribution and rate analysis.'},
   {keys:['index','fragmentation','rebuild','reorganize'],                rgType:'Custom metric',                     rgCat:'Custom',        match:'custom',  source:'Custom',                 note:'T-SQL on sys.dm_db_index_physical_stats'},
   {keys:['tempdb','temp db','tempdb contention'],                        rgType:'Custom metric',                     rgCat:'Custom',        match:'custom',  source:'Custom',                 note:'T-SQL for tempdb contention/space metrics'},
   // .condition file inferred types (from inferConditionAlertType)
-  {keys:['ha/dr','database state'],                                       rgType:'AG / Cluster failover',             rgCat:'Administrative',match:'direct',  source:'Custom',                 note:'HA/DR condition — availability group or mirroring event'},
-  {keys:['security/audit'],                                               rgType:'SQL Server log entry',              rgCat:'Administrative',match:'partial', source:'Custom',                 note:'Security/Audit condition — monitor SQL error log or Extended Events'},
-  {keys:['service broker'],                                               rgType:'Custom metric',                     rgCat:'Custom',        match:'custom',  source:'Custom',                 note:'Service Broker alert — build custom metric on sys.transmission_queue'},
-  {keys:['scheduler/resource'],                                           rgType:'Custom metric',                     rgCat:'Resources',     match:'custom',  source:'Custom',                 note:'Build custom metric on sys.dm_os_schedulers or sys.dm_os_ring_buffers'},
-  {keys:['query performance'],                                            rgType:'Dynamic alerts — Query throughput', rgCat:'Resources',     match:'direct',  source:'Custom',                 note:'Query performance condition — maps to ML-powered throughput alert'},
-  {keys:['configuration/advisory','replication'],                        rgType:'SQL Server log entry',              rgCat:'Administrative',match:'partial', source:'Custom',                 note:'Configuration or replication change — monitor via SQL Server error log'},
+  {keys:['ha/dr'],                                                         rgType:'AG / Cluster failover',             rgCat:'Administrative',match:'partial', source:'Custom',                 note:'HA/DR condition — review whether this is a failover/role-change event (map to AG / Cluster failover alert) or a health/sync degradation condition (requires custom metric on sys.dm_hadr_database_replica_states). Do not assume equivalence without inspection.'},
+  {keys:['database state'],                                                rgType:'Custom metric',                     rgCat:'Administrative',match:'custom',  source:'Custom',                 note:'Database state change (suspect, restoring, offline, emergency) — no built-in Redgate Monitor equivalent. Monitor via: SELECT name, state_desc FROM sys.databases WHERE state_desc <> \'ONLINE\' — alert when count > 0. Pair with SQL Server log entry alert for error log messages.'},
+  {keys:['security/audit'],                                               rgType:'SQL Server log entry',              rgCat:'Administrative',match:'partial', source:'Custom',                 note:'Security/Audit condition — Redgate Monitor relies on error log pattern matching, not semantic state detection. No rate-of-change alerting. Supplement with Extended Events audit session for granular security event capture.'},
+  {keys:['service broker'],                                               rgType:'Custom metric',                     rgCat:'Custom',        match:'custom',  source:'Custom',                 note:'Service Broker alert — build custom metric on sys.transmission_queue and sys.service_queues. No built-in equivalent in Redgate Monitor.'},
+  {keys:['scheduler/resource'],                                           rgType:'Custom metric',                     rgCat:'Resources',     match:'custom',  source:'Custom',                 note:'Build custom metric on sys.dm_os_schedulers or sys.dm_os_ring_buffers. No built-in Redgate Monitor equivalent.'},
+  {keys:['query performance'],                                            rgType:'Dynamic alerts — Query throughput', rgCat:'Resources',     match:'partial', source:'Custom',                 note:'Behavior differs significantly: SQL Sentry alerts on individual query events (recompiles, spikes). Redgate Monitor Dynamic alerts detect sustained impact patterns using ML baselines. Micro-events are intentionally suppressed. May trigger later and highlight different queries. This is an impact-based equivalent, not a 1:1 match.'},
+  {keys:['replication'],                                                   rgType:'Custom metric',                     rgCat:'Administrative',match:'custom',  source:'Custom',                 note:'Replication health requires DMV-based custom metrics — not a SQL Server log entry alert. Monitor distribution latency via: SELECT MAX(latency) AS max_latency_sec FROM distribution.dbo.MSdistribution_status — or use sys.dm_replication_stats. Alert when latency exceeds your SLA threshold.'},
+  {keys:['configuration/advisory'],                                        rgType:'SQL Server log entry',              rgCat:'Administrative',match:'partial', source:'Custom',                 note:'Configuration change detection — Redgate Monitor uses error log pattern matching, not semantic state detection. Loss of semantic awareness compared to SQL Sentry advisory conditions. Consolidate into a Configuration Drift custom metric group where possible.'},
   // ── Advisory Conditions Pack — solarwinds.com advisory-conditions-pack ─────
   // Availability & Infrastructure
   {keys:['replica send queue','replica recovery queue','send or recovery queue','hadr send queue','hadr recovery queue'], rgType:'Custom metric', rgCat:'Advisory', match:'custom', source:'Custom', note:'SELECT send_queue_size, redo_queue_size FROM sys.dm_hadr_database_replica_states WHERE send_queue_size > 3072 OR redo_queue_size > 3072 — threshold: 3 MB (3072 KB)'},
@@ -1665,7 +1676,7 @@ function find(arr, keys) { return arr.find(h => keys.includes(h.toLowerCase().re
 
 // ── Preview ────────────────────────────────────────────────────────────────
 const SEV_ORDER = { high: 0, medium: 1, low: 2, info: 2 };
-const MATCH_ORDER = { none: 0, partial: 1, custom: 2, direct: 3 };
+const MATCH_ORDER = { retire: 0, none: 1, partial: 2, custom: 3, direct: 4 };
 
 function sortMapped(mapped) {
   const { col, dir } = previewSort;
@@ -1726,6 +1737,7 @@ function buildPreview() {
   const nPartial = resolved.filter(r => r.match === 'partial').length;
   const nCustom  = resolved.filter(r => r.match === 'custom').length;
   const nNone    = resolved.filter(r => r.match === 'none').length;
+  const nRetire  = resolved.filter(r => r.match === 'retire').length;
 
   document.getElementById('statsBar').innerHTML = `
     <div class="stat-card"><div class="stat-n">${mapped.length}</div><div class="stat-l">Total alerts</div></div>
@@ -1735,9 +1747,10 @@ function buildPreview() {
 
   document.getElementById('statsBarMatch').innerHTML = `
     <div class="stat-card stat-direct"><div class="stat-n" style="color:var(--green-text)">${nDirect}</div><div class="stat-l">✓ Direct replacement</div></div>
-    <div class="stat-card stat-partial"><div class="stat-n" style="color:var(--amber-text)">${nPartial}</div><div class="stat-l">⚠ Partial / needs tuning</div></div>
+    <div class="stat-card stat-partial"><div class="stat-n" style="color:var(--amber-text)">${nPartial}</div><div class="stat-l">⚠ Partial — behavior differs</div></div>
     <div class="stat-card stat-custom"><div class="stat-n" style="color:var(--purple-text)">${nCustom}</div><div class="stat-l">⚙ Custom metric needed</div></div>
-    <div class="stat-card stat-none"><div class="stat-n" style="color:var(--red-text)">${nNone}</div><div class="stat-l">✗ Not available</div></div>`;
+    <div class="stat-card stat-none"><div class="stat-n" style="color:var(--red-text)">${nNone}</div><div class="stat-l">✗ Not available</div></div>
+    ${nRetire > 0 ? `<div class="stat-card"><div class="stat-n" style="color:var(--text3)">${nRetire}</div><div class="stat-l">🗑 Retire — do not recreate</div></div>` : ''}`;
 
   document.getElementById('printHeader').textContent =
     `${srcLabel} → Redgate Monitor · ${mapped.length} conditions · ${new Date().toLocaleDateString()}`;
@@ -1781,6 +1794,7 @@ function buildModule(list, url, tok, inst) {
     const r = resolveRgType(a.alertType, a.alertName, a.message);
     if (r.match === 'custom')  customNeeded.push({ type: r.rgType, note: r.note, alert: a });
     if (r.match === 'none')    notAvailable.push(`${a.alertName} — ${r.note}`);
+    if (r.match === 'retire')  notAvailable.push(`[RETIRE] ${a.alertName} — ${r.note}`);
   });
   const uniqueCustom = [...new Map(customNeeded.map(c => [c.type, c])).values()];
 
@@ -1893,6 +1907,10 @@ function ${fnName} {
         foreach (\\$Alert in \\$script:AlertData) {
             if (\\$Alert.MatchType -eq 'none') {
                 Write-Warning "Skipping '$($Alert.AlertName)' — no Redgate Monitor equivalent."
+                continue
+            }
+            if (\\$Alert.MatchType -eq 'retire') {
+                Write-Warning "Skipping '$($Alert.AlertName)' — recommended to RETIRE this alert. Redgate Monitor makes it unnecessary or it generates noise without actionable signal. Do not recreate."
                 continue
             }
 
@@ -2274,10 +2292,11 @@ function renderAlertList(mapped) {
   });
 
   const groupConfig = [
-    { key: 'direct',  label: 'Direct replacements',        cls: 'mgh-direct',  icon: '&#10003;', desc: 'Enable these built-in Redgate Monitor alerts immediately — no setup required.' },
-    { key: 'partial', label: 'Partial / configured match', cls: 'mgh-partial', icon: '&#9432;',  desc: 'Built-in RG alert covers the intent but needs threshold tuning or XE supplement.' },
-    { key: 'custom',  label: 'Custom metric required',     cls: 'mgh-custom',  icon: '&#9881;',  desc: 'No built-in equivalent — click Configure to define the T-SQL custom metric.' },
-    { key: 'none',    label: 'Not available in Redgate',   cls: 'mgh-none',    icon: '&#10007;', desc: 'No T-SQL or Redgate Monitor equivalent. See alternative recommendations.' },
+    { key: 'direct',  label: 'Direct replacements',                  cls: 'mgh-direct',  icon: '&#10003;', desc: 'Enable these built-in Redgate Monitor alerts immediately — no setup required.' },
+    { key: 'partial', label: 'Partial match — behavior differs',      cls: 'mgh-partial', icon: '&#9432;',  desc: 'Built-in RG alert covers the intent but detection method, timing, or fidelity differs from SQL Sentry. Review notes before enabling.' },
+    { key: 'custom',  label: 'Custom metric required',               cls: 'mgh-custom',  icon: '&#9881;',  desc: 'No built-in equivalent — click Configure to define the T-SQL custom metric in Redgate Monitor.' },
+    { key: 'none',    label: 'Not available in Redgate Monitor',      cls: 'mgh-none',    icon: '&#10007;', desc: 'No T-SQL or Redgate Monitor equivalent. See alternative recommendations below.' },
+    { key: 'retire',  label: 'Not recommended — retire this alert',  cls: 'mgh-retire',  icon: '&#128465;',desc: 'Redgate Monitor\'s model makes these alerts unnecessary or noise-generating. Do not recreate.' },
   ];
 
   const html = groupConfig.map(gc => {
@@ -2293,7 +2312,12 @@ function renderAlertList(mapped) {
         ? `<button class="cm-btn" onclick="openCmModal(alerts[${a._id}])">${hasDef ? '&#10003; Configured' : '&#9881; Configure'}</button>`
         : '';
       const noteBadge = gc.key === 'none'
-        ? `<span class="note-pill" title="${esc(r.note)}">No equivalent</span>` : '';
+        ? `<span class="note-pill" title="${esc(r.note)}">No equivalent</span>`
+        : gc.key === 'retire'
+        ? `<span class="note-pill" style="background:var(--bg3);color:var(--text3);border-color:var(--border2)" title="${esc(r.note)}">🗑 Retire</span>`
+        : gc.key === 'partial'
+        ? `<span class="note-pill" style="background:var(--amber-bg);color:var(--amber-text);border-color:var(--amber-border)" title="${esc(r.note)}">⚠ Behavior differs</span>`
+        : '';
       return `<div class="alert-card">
         <input type="checkbox" ${a._excluded?'':'checked'} style="margin-top:3px" onchange="alerts[${a._id}]._excluded=!this.checked">
         <div class="alert-card-body">
@@ -2311,7 +2335,7 @@ function renderAlertList(mapped) {
             </div>
             ${cmBadge}${noteBadge}
           </div>
-          ${gc.key === 'none' ? `<div style="font-size:11px;color:var(--text3);margin-top:3px">${esc(r.note)}</div>` : ''}
+          ${(gc.key === 'none' || gc.key === 'retire' || gc.key === 'partial') ? `<div style="font-size:11px;color:var(--text3);margin-top:3px">${esc(r.note)}</div>` : ''}
         </div>
       </div>`;
     }).join('');
@@ -2353,6 +2377,7 @@ function showSummaryReport() {
   const partial = incResolved.filter(({ r }) => r.match === 'partial').length;
   const custom  = incResolved.filter(({ r }) => r.match === 'custom').length;
   const none    = incResolved.filter(({ r }) => r.match === 'none').length;
+  const retire  = incResolved.filter(({ r }) => r.match === 'retire').length;
   const highN   = inc.filter(a => a.severity.toLowerCase() === 'high').length;
   const directPct = inc.length ? Math.round(direct/inc.length*100) : 0;
   const customPct = inc.length ? Math.round(custom/inc.length*100) : 0;
@@ -2362,13 +2387,14 @@ function showSummaryReport() {
     .filter(({ r }) => r.match === 'custom')
     .map(({ r }) => r.rgType))];
 
-  const summaryText = `This migration plan converts ${inc.length} ${srcLabel} conditions into Redgate Monitor equivalents.
+  const summaryText = `This migration plan evaluates ${inc.length} ${srcLabel} conditions against Redgate Monitor equivalents.
 ${direct} condition${direct!==1?'s':''} (${directPct}%) map directly to built-in Redgate Monitor alert types and can be activated immediately with no additional configuration required.
-${partial > 0 ? `${partial} condition${partial!==1?'s':''} have partial equivalents that require threshold tuning or supplemental Extended Events / error log monitoring.` : ''}
+${partial > 0 ? `${partial} condition${partial!==1?'s':''} have partial equivalents — built-in Redgate Monitor alerts cover the intent but detection method, timing, or fidelity differs from SQL Sentry. Review behavior notes before enabling.` : ''}
 ${custom > 0 ? `${custom} condition${custom!==1?'s':''} (${customPct}%) require custom T-SQL metrics to be created in Redgate Monitor before migration. ${customTypes.length} distinct metric type${customTypes.length!==1?'s are':' is'} needed.` : ''}
-${none > 0 ? `${none} condition${none!==1?'s':''} have no Redgate Monitor equivalent and cannot be migrated — alternative monitoring approaches are documented in the gap analysis below.` : ''}
+${none > 0 ? `${none} condition${none!==1?'s':''} have no Redgate Monitor equivalent and cannot be migrated — alternative approaches are documented in the gap analysis below.` : ''}
+${retire > 0 ? `${retire} condition${retire!==1?'s':''} are recommended for retirement — Redgate Monitor's monitoring model makes these unnecessary or they generate noise without actionable signal. Do not recreate these alerts.` : ''}
 ${highN > 0 ? `\nPriority: ${highN} High-severity condition${highN!==1?'s':''} should be configured in Redgate Monitor first.` : ''}
-Recommended order: (1) Activate direct replacements immediately. (2) Tune thresholds for partial matches to align with your SLAs. (3) Build custom metrics in priority order using the T-SQL queries in the export.`;
+Recommended order: (1) Activate direct replacements immediately. (2) Review behavior differences for partial matches before enabling. (3) Build custom metrics in priority order using the T-SQL queries in the export. (4) Retire noise-generating conditions intentionally.`;
 
   // Gap analysis rows — already resolved above
   const gapRows = incResolved
@@ -2399,7 +2425,7 @@ Recommended order: (1) Activate direct replacements immediately. (2) Tune thresh
   const allRows = incResolved.map(({ a, r }) => {
     const sev = a.severity.toLowerCase();
     const sevCls = sev==='high'?'badge-high':sev==='medium'?'badge-med':'badge-low';
-    const mCls = r.match==='direct'?'badge-direct':r.match==='partial'?'badge-partial':r.match==='none'?'badge-none':'badge-custom';
+    const mCls = r.match==='direct'?'badge-direct':r.match==='partial'?'badge-partial':r.match==='none'?'badge-none':r.match==='retire'?'badge-retire':'badge-custom';
     return `<tr>
       <td>${esc(a.alertName||'—')}</td>
       <td>${esc(a.instance||'—')}</td>
@@ -2432,10 +2458,11 @@ Recommended order: (1) Activate direct replacements immediately. (2) Tune thresh
 
     <div class="report-stats">
       <div class="report-stat"><div class="n">${inc.length}</div><div class="l">Total conditions</div></div>
-      <div class="report-stat"><div class="n" style="color:var(--green-text)">${direct}</div><div class="l">Direct (ready now)</div></div>
-      <div class="report-stat"><div class="n" style="color:var(--amber-text)">${partial}</div><div class="l">Partial / needs tuning</div></div>
-      <div class="report-stat"><div class="n" style="color:var(--purple-text)">${custom}</div><div class="l">Custom metric needed</div></div>
-      <div class="report-stat"><div class="n" style="color:var(--red-text)">${none}</div><div class="l">Not available</div></div>
+      <div class="report-stat"><div class="n" style="color:var(--green-text)">${direct}</div><div class="l">✓ Direct (ready now)</div></div>
+      <div class="report-stat"><div class="n" style="color:var(--amber-text)">${partial}</div><div class="l">⚠ Partial — review first</div></div>
+      <div class="report-stat"><div class="n" style="color:var(--purple-text)">${custom}</div><div class="l">⚙ Custom metric needed</div></div>
+      <div class="report-stat"><div class="n" style="color:var(--red-text)">${none}</div><div class="l">✗ Not available</div></div>
+      ${retire > 0 ? `<div class="report-stat"><div class="n" style="color:var(--text3)">${retire}</div><div class="l">🗑 Retire</div></div>` : ''}
     </div>
 
     ${none > 0 ? `<div class="report-section">
@@ -2443,6 +2470,15 @@ Recommended order: (1) Activate direct replacements immediately. (2) Tune thresh
       <table class="gap-table">
         <thead><tr><th>Condition name</th><th>Category</th><th>Reason / alternative</th></tr></thead>
         <tbody>${gapRows}</tbody>
+      </table>
+    </div>` : ''}
+
+    ${retire > 0 ? `<div class="report-section">
+      <div class="report-section-title">Recommended for retirement (${retire} conditions) — do not recreate</div>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:10px">These SQL Sentry conditions should not be recreated in Redgate Monitor. Redgate Monitor's monitoring model makes them unnecessary, or they generate noise without actionable signal. Retiring them intentionally reduces alert fatigue.</p>
+      <table class="gap-table">
+        <thead><tr><th>Condition name</th><th>Reason to retire</th></tr></thead>
+        <tbody>${incResolved.filter(({r})=>r.match==='retire').map(({a,r})=>`<tr><td><strong>${esc(a.alertName)}</strong></td><td>${esc(r.note)}</td></tr>`).join('')}</tbody>
       </table>
     </div>` : ''}
 
