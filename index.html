@@ -288,8 +288,13 @@
   .drop-zone svg { display: block; margin: 0 auto 8px; opacity: .5; }
 
   /* ── Stats bar ── */
-  .stats-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 1.25rem; }
+  .stats-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 6px; }
+  .stats-grid-match { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 1.25rem; }
   .stat-card { background: var(--bg2); border-radius: var(--radius); padding: 10px 14px; text-align: center; }
+  .stat-card.stat-direct  { border-left: 2px solid var(--green-border); }
+  .stat-card.stat-partial { border-left: 2px solid var(--amber-border); }
+  .stat-card.stat-custom  { border-left: 2px solid var(--purple-border); }
+  .stat-card.stat-none    { border-left: 2px solid var(--red-border); }
   .stat-n { font-size: 24px; font-weight: 600; }
   .stat-l { font-size: 11px; color: var(--text2); margin-top: 2px; }
 
@@ -552,7 +557,7 @@
     padding: 1rem 1.25rem;
     font-size: 13px; line-height: 1.8; color: var(--text);
   }
-  .report-stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin-bottom: 1.25rem; }
+  .report-stats { display: grid; grid-template-columns: repeat(5,1fr); gap: 8px; margin-bottom: 1.25rem; }
   .report-stat { background: var(--bg2); border-radius: var(--radius); padding: 10px; text-align: center; }
   .report-stat .n { font-size: 22px; font-weight: 700; }
   .report-stat .l { font-size: 11px; color: var(--text2); }
@@ -727,6 +732,7 @@
   <!-- ── TAB 2: PREVIEW ── -->
   <div id="tab2" class="hidden">
     <div class="stats-grid" id="statsBar"></div>
+    <div class="stats-grid-match" id="statsBarMatch"></div>
     <div class="card" id="alertListCard">
       <div class="print-header" id="printHeader"></div>
       <div class="section-title">Mapped alerts</div>
@@ -1714,11 +1720,24 @@ function buildPreview() {
   const low  = mapped.filter(a => ['low','info'].includes(a.severity.toLowerCase())).length;
   const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'dpa' ? 'SolarWinds DPA' : 'IDERA';
 
+  // Compute match-type breakdown once per alert
+  const resolved = mapped.map(a => resolveRgType(a.alertType, a.alertName, a.message));
+  const nDirect  = resolved.filter(r => r.match === 'direct').length;
+  const nPartial = resolved.filter(r => r.match === 'partial').length;
+  const nCustom  = resolved.filter(r => r.match === 'custom').length;
+  const nNone    = resolved.filter(r => r.match === 'none').length;
+
   document.getElementById('statsBar').innerHTML = `
     <div class="stat-card"><div class="stat-n">${mapped.length}</div><div class="stat-l">Total alerts</div></div>
-    <div class="stat-card"><div class="stat-n" style="color:var(--red-text)">${high}</div><div class="stat-l">High</div></div>
-    <div class="stat-card"><div class="stat-n" style="color:var(--amber-text)">${med}</div><div class="stat-l">Medium</div></div>
-    <div class="stat-card"><div class="stat-n" style="color:var(--green-text)">${low}</div><div class="stat-l">Low</div></div>`;
+    <div class="stat-card"><div class="stat-n" style="color:var(--red-text)">${high}</div><div class="stat-l">High severity</div></div>
+    <div class="stat-card"><div class="stat-n" style="color:var(--amber-text)">${med}</div><div class="stat-l">Medium severity</div></div>
+    <div class="stat-card"><div class="stat-n" style="color:var(--green-text)">${low}</div><div class="stat-l">Low severity</div></div>`;
+
+  document.getElementById('statsBarMatch').innerHTML = `
+    <div class="stat-card stat-direct"><div class="stat-n" style="color:var(--green-text)">${nDirect}</div><div class="stat-l">✓ Direct replacement</div></div>
+    <div class="stat-card stat-partial"><div class="stat-n" style="color:var(--amber-text)">${nPartial}</div><div class="stat-l">⚠ Partial / needs tuning</div></div>
+    <div class="stat-card stat-custom"><div class="stat-n" style="color:var(--purple-text)">${nCustom}</div><div class="stat-l">⚙ Custom metric needed</div></div>
+    <div class="stat-card stat-none"><div class="stat-n" style="color:var(--red-text)">${nNone}</div><div class="stat-l">✗ Not available</div></div>`;
 
   document.getElementById('printHeader').textContent =
     `${srcLabel} → Redgate Monitor · ${mapped.length} conditions · ${new Date().toLocaleDateString()}`;
@@ -1992,8 +2011,8 @@ function buildJSON(list) {
 }
 
 function buildSQL(list) {
-  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : 'IDERA';
-  const tblName  = sourceMode === 'sqlsentry' ? 'SSAlertImport' : 'IDERAAlertImport';
+  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'dpa' ? 'SolarWinds DPA' : 'IDERA';
+  const tblName  = sourceMode === 'sqlsentry' ? 'SSAlertImport' : sourceMode === 'dpa' ? 'DPAAlertImport' : 'IDERAAlertImport';
   let s = `-- ${srcLabel} Alert Annotations — staging table with RG type mapping
 -- Generated: ${new Date().toISOString()}
 
@@ -2031,7 +2050,7 @@ function showOutput(mode) {
     const id = 'oTab' + m.charAt(0).toUpperCase() + m.slice(1);
     document.getElementById(id).classList.toggle('active', m === mode);
   });
-  const src = sourceMode === 'sqlsentry' ? 'SQL Sentry' : 'IDERA';
+  const src = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'dpa' ? 'SolarWinds DPA' : 'IDERA';
   const notes = {
     ps:   `Signed PowerShell module (.psm1) with WhatIf, transcript logging, and rollback log. Import-Module then call the exported function. Use -WhatIf for a dry run. Alerts marked [CUSTOM METRIC REQUIRED] need a custom metric built in Redgate Monitor first (Configuration → Custom metrics and alerts).`,
     json: `POST this JSON to a webhook or routing layer. Each record carries both the ${src} category and the resolved Redgate Monitor alert type for downstream logic.`,
@@ -2127,9 +2146,15 @@ addNotifGroup();
 
 // ── Notification group mapping ─────────────────────────────────────────────
 function renderNotifGroups() {
+  const srcPlaceholders = {
+    sqlsentry: 'SQL Sentry notification group / email list name',
+    idera:     'IDERA Alert Action / subscription name',
+    dpa:       'DPA notification target / email recipient name'
+  };
+  const srcPh = srcPlaceholders[sourceMode] || srcPlaceholders.sqlsentry;
   const rows = notifGroups.map((g, i) => `
     <div class="notif-row" id="ng-${i}">
-      <input type="text" placeholder="SQL Sentry group / email list name"
+      <input type="text" placeholder="${srcPh}"
         value="${esc(g.ssGroup)}"
         oninput="notifGroups[${i}].ssGroup=this.value"
         style="margin-bottom:0">
@@ -2318,19 +2343,24 @@ function showSummaryReport() {
   if (!mapped.length) { alert('No alerts loaded — import and preview first.'); return; }
 
   const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'dpa' ? 'SolarWinds DPA' : 'IDERA';
+  const srcGroupLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry group' : sourceMode === 'dpa' ? 'DPA notification target' : 'IDERA Alert Action';
   const inc = mapped.filter(a => !a._excluded);
-  const direct  = inc.filter(a => resolveRgType(a.alertType,a.alertName,a.message).match === 'direct').length;
-  const partial = inc.filter(a => resolveRgType(a.alertType,a.alertName,a.message).match === 'partial').length;
-  const custom  = inc.filter(a => resolveRgType(a.alertType,a.alertName,a.message).match === 'custom').length;
-  const none    = inc.filter(a => resolveRgType(a.alertType,a.alertName,a.message).match === 'none').length;
+
+  // Resolve each alert once and cache — avoids 5–7x repeated calls per alert below
+  const incResolved = inc.map(a => ({ a, r: resolveRgType(a.alertType, a.alertName, a.message) }));
+
+  const direct  = incResolved.filter(({ r }) => r.match === 'direct').length;
+  const partial = incResolved.filter(({ r }) => r.match === 'partial').length;
+  const custom  = incResolved.filter(({ r }) => r.match === 'custom').length;
+  const none    = incResolved.filter(({ r }) => r.match === 'none').length;
   const highN   = inc.filter(a => a.severity.toLowerCase() === 'high').length;
   const directPct = inc.length ? Math.round(direct/inc.length*100) : 0;
   const customPct = inc.length ? Math.round(custom/inc.length*100) : 0;
 
   // Unique custom metric groups needed
-  const customTypes = [...new Set(inc
-    .filter(a => resolveRgType(a.alertType,a.alertName,a.message).match === 'custom')
-    .map(a => resolveRgType(a.alertType,a.alertName,a.message).rgType))];
+  const customTypes = [...new Set(incResolved
+    .filter(({ r }) => r.match === 'custom')
+    .map(({ r }) => r.rgType))];
 
   const summaryText = `This migration plan converts ${inc.length} ${srcLabel} conditions into Redgate Monitor equivalents.
 ${direct} condition${direct!==1?'s':''} (${directPct}%) map directly to built-in Redgate Monitor alert types and can be activated immediately with no additional configuration required.
@@ -2340,23 +2370,19 @@ ${none > 0 ? `${none} condition${none!==1?'s':''} have no Redgate Monitor equiva
 ${highN > 0 ? `\nPriority: ${highN} High-severity condition${highN!==1?'s':''} should be configured in Redgate Monitor first.` : ''}
 Recommended order: (1) Activate direct replacements immediately. (2) Tune thresholds for partial matches to align with your SLAs. (3) Build custom metrics in priority order using the T-SQL queries in the export.`;
 
-  // Gap analysis rows
-  const gapRows = inc
-    .filter(a => resolveRgType(a.alertType,a.alertName,a.message).match === 'none')
-    .map(a => {
-      const r = resolveRgType(a.alertType,a.alertName,a.message);
-      return `<tr>
+  // Gap analysis rows — already resolved above
+  const gapRows = incResolved
+    .filter(({ r }) => r.match === 'none')
+    .map(({ a, r }) => `<tr>
         <td><strong>${esc(a.alertName)}</strong></td>
         <td>${esc(a.alertType||'—')}</td>
         <td>${esc(r.note)}</td>
-      </tr>`;
-    }).join('');
+      </tr>`).join('');
 
-  // Custom metrics needing setup
-  const customRows = inc
-    .filter(a => resolveRgType(a.alertType,a.alertName,a.message).match === 'custom')
-    .map(a => {
-      const r = resolveRgType(a.alertType,a.alertName,a.message);
+  // Custom metrics needing setup — already resolved above
+  const customRows = incResolved
+    .filter(({ r }) => r.match === 'custom')
+    .map(({ a, r }) => {
       const sev = a.severity.toLowerCase();
       const sevCls = sev==='high'?'badge-high':sev==='medium'?'badge-med':'badge-low';
       const sql = extractSQLFromNote(r.note);
@@ -2369,9 +2395,8 @@ Recommended order: (1) Activate direct replacements immediately. (2) Tune thresh
       </div>`;
     }).join('');
 
-  // All mappings table
-  const allRows = inc.map(a => {
-    const r = resolveRgType(a.alertType,a.alertName,a.message);
+  // All mappings table — already resolved above
+  const allRows = incResolved.map(({ a, r }) => {
     const sev = a.severity.toLowerCase();
     const sevCls = sev==='high'?'badge-high':sev==='medium'?'badge-med':'badge-low';
     const mCls = r.match==='direct'?'badge-direct':r.match==='partial'?'badge-partial':r.match==='none'?'badge-none':'badge-custom';
@@ -2385,12 +2410,12 @@ Recommended order: (1) Activate direct replacements immediately. (2) Tune thresh
     </tr>`;
   }).join('');
 
-  // Notification groups
+  // Notification groups — use source-aware column header
   const notifSection = notifGroups.filter(g => g.ssGroup).length
     ? `<div class="report-section">
         <div class="report-section-title">Notification group migration</div>
         <table class="gap-table">
-          <thead><tr><th>SQL Sentry group</th><th>Redgate Monitor action</th><th>Target</th></tr></thead>
+          <thead><tr><th>${srcGroupLabel}</th><th>Redgate Monitor action</th><th>Target</th></tr></thead>
           <tbody>${notifGroups.filter(g=>g.ssGroup).map(g=>`<tr><td>${esc(g.ssGroup)}</td><td>${esc(g.rgAction)}</td><td>${esc(g.rgTarget||'—')}</td></tr>`).join('')}</tbody>
         </table>
         <p style="font-size:11px;color:var(--text3);margin-top:6px">Configure notification profiles in Redgate Monitor under Configuration → Notification profiles, then assign to each alert type.</p>
@@ -2408,6 +2433,7 @@ Recommended order: (1) Activate direct replacements immediately. (2) Tune thresh
     <div class="report-stats">
       <div class="report-stat"><div class="n">${inc.length}</div><div class="l">Total conditions</div></div>
       <div class="report-stat"><div class="n" style="color:var(--green-text)">${direct}</div><div class="l">Direct (ready now)</div></div>
+      <div class="report-stat"><div class="n" style="color:var(--amber-text)">${partial}</div><div class="l">Partial / needs tuning</div></div>
       <div class="report-stat"><div class="n" style="color:var(--purple-text)">${custom}</div><div class="l">Custom metric needed</div></div>
       <div class="report-stat"><div class="n" style="color:var(--red-text)">${none}</div><div class="l">Not available</div></div>
     </div>
