@@ -695,8 +695,16 @@
     <div class="card hidden" id="howToDPA">
       <div class="section-title">How to export alerts from SolarWinds DPA</div>
       <p style="font-size:12px;color:var(--text2);line-height:1.8">
-        In the DPA web console, navigate to <strong>Alerts → Alert History</strong> on the instance you want to export.
-        Use the date range picker to select your time window, then click <strong>Export to CSV</strong> in the top-right of the alert table.
+        <strong>Option A — Native JSON export (recommended):</strong> In the DPA web console, go to
+        <strong>Alerts → Alert Configuration</strong>. Click the <strong>Export</strong> button (top-right) to
+        download the alert definitions as JSON files (<code>Alerts_*.json</code>, <code>Rules_*.json</code>,
+        <code>CustomProperties_*.json</code>). Drop all three files onto this tool — or just
+        <code>Alerts_*.json</code> for alert definitions only. This format captures alert names, types,
+        active state, execution intervals, thresholds, and parameters.
+        <br><br>
+        <strong>Option B — Alert history CSV:</strong> Navigate to <strong>Alerts → Alert History</strong>
+        on the instance you want to export. Use the date range picker to select your time window, then click
+        <strong>Export to CSV</strong> in the top-right of the alert table.
         The exported file includes columns: <code>AlertName</code>, <code>Severity</code>, <code>DatabaseInstance</code>,
         <code>StartTime</code>, <code>AlertType</code>, <code>Message</code>, <code>Threshold</code>, <code>CurrentValue</code>.
         Severity levels map as: <strong>Fatal → High</strong>, <strong>Critical → High</strong>,
@@ -922,26 +930,86 @@ function copyCardSql(btn) {
 }
 
 // ── DPA Alert type mapping ─────────────────────────────────────────────────
+// Keys include both human-readable DPA alert names (CSV export) and the native
+// type codes returned in DPA JSON exports (Alerts_*.json: alert.type field).
 const DPA_TYPE_MAP = [
-  {keys:['wait time anomaly','anomaly','ml anomaly'],         rgType:'Dynamic alerts — Waits',             rgCat:'Wait Time',     match:'direct',  source:'Custom',                note:'ML-powered (Redgate Monitor v14+)'},
-  {keys:['sql statement wait','query wait','statement wait'], rgType:'Long running query',                  rgCat:'Wait Time',     match:'direct',  source:'Custom',                note:'Maps to elapsed time threshold'},
-  {keys:['wait type','wait time','database instance wait'],   rgType:'Waits (custom metric)',              rgCat:'Wait Time',     match:'custom',  source:'Custom',                note:'Build custom metric on sys.dm_os_wait_stats'},
-  {keys:['cpu','processor'],                                   rgType:'Processor (CPU) utilization',        rgCat:'Resources',     match:'direct',  source:'PerformanceDegradation',note:'Machine-level threshold alert'},
-  {keys:['memory','ram','buffer cache','page life'],           rgType:'OS memory available',                rgCat:'Resources',     match:'direct',  source:'PerformanceDegradation',note:'Machine-level memory threshold'},
-  {keys:['disk i/o','io utilization','disk io','read/write'], rgType:'Disk space / avg read-write time',  rgCat:'Resources',     match:'direct',  source:'PerformanceDegradation',note:'Disk Used % + I/O latency alerts'},
-  {keys:['network'],                                           rgType:'Network utilization',                rgCat:'Resources',     match:'direct',  source:'Custom',                note:'Disabled by default in Redgate Monitor v14'},
-  {keys:['throughput','query throughput'],                     rgType:'Dynamic alerts — Query throughput',  rgCat:'Resources',     match:'direct',  source:'Custom',                note:'ML-powered (Redgate Monitor v14+)'},
-  {keys:['buffer','cache hit','hit ratio'],                    rgType:'Custom metric',                      rgCat:'Resources',     match:'custom',  source:'Custom',                note:'T-SQL on sys.dm_os_buffer_descriptors'},
-  {keys:['unavailable','not accessible','down','offline','unreachable'],rgType:'SQL Server unavailable',   rgCat:'Administrative',match:'direct',  source:'Custom',                note:'Instance connectivity / service check'},
-  {keys:['blocking','blocked','blocker'],                      rgType:'Blocking processes',                 rgCat:'Administrative',match:'direct',  source:'Custom',                note:'Head-blocker wait time threshold'},
-  {keys:['deadlock'],                                          rgType:'Deadlock (Extended Events)',         rgCat:'Administrative',match:'direct',  source:'Custom',                note:'Event alert with deadlock graph'},
-  {keys:['backup'],                                            rgType:'Backup overdue',                     rgCat:'Administrative',match:'direct',  source:'Custom',                note:'Based on backup_finish_date vs interval'},
-  {keys:['job fail','agent job','job error','job'],            rgType:'Job failing',                        rgCat:'Administrative',match:'direct',  source:'Custom',                note:'dbo.sysjobhistory failure detection'},
-  {keys:['parameter change','config change','configuration'], rgType:'SQL Server log entry',               rgCat:'Administrative',match:'partial', source:'Custom',                note:'Supplement with Extended Events custom metric'},
-  {keys:['disk space','disk capacity','volume','drive'],       rgType:'Disk space',                         rgCat:'Administrative',match:'direct',  source:'Custom',                note:'Machine-level Disk Used % threshold'},
-  {keys:['availability group','ag failover','cluster fail','cluster','failover'],rgType:'AG / Cluster failover',rgCat:'Administrative',match:'direct',source:'Custom',             note:'Event alert for HA topology changes'},
-  {keys:['custom procedure','stored procedure','sproc'],       rgType:'Custom metric',                      rgCat:'Custom',        match:'partial', source:'Custom',                note:'Wrap proc numeric output in scalar SELECT'},
-  {keys:['custom sql','custom alert','boolean','numeric return'],rgType:'Custom metric + alert',            rgCat:'Custom',        match:'direct',  source:'Custom',                note:'T-SQL returning single numeric value'},
+  // Wait time — DPA type codes: WAIT, WAIT_ANOMALY
+  {keys:['wait_anomaly','wait time anomaly','anomaly','ml anomaly'],
+   rgType:'Dynamic alerts — Waits',            rgCat:'Wait Time',     match:'direct',  source:'Custom',
+   note:'ML-powered wait time anomaly detection (Redgate Monitor v14+). DPA type: WAIT_ANOMALY.'},
+  {keys:['sql statement wait','query wait','statement wait'],
+   rgType:'Long running query',                 rgCat:'Wait Time',     match:'direct',  source:'Custom',
+   note:'Maps to elapsed time threshold. DPA type: STATEMENT_WAIT.'},
+  {keys:['wait','wait type','wait time','database instance wait'],
+   rgType:'Waits (custom metric)',              rgCat:'Wait Time',     match:'custom',  source:'Custom',
+   note:'SELECT wait_type, wait_time_ms, signal_wait_time_ms FROM sys.dm_os_wait_stats WHERE wait_type NOT IN (\'SLEEP_TASK\',\'WAITFOR\',\'BROKER_TO_FLUSH\',\'BROKER_SERVICE_RECEIVER_SIGNAL\',\'CLR_AUTO_EVENT\',\'DISPATCHER_QUEUE_SEMAPHORE\',\'FT_IFTS_SCHEDULER_IDLE_WAIT\',\'HADR_WORK_QUEUE\',\'ONDEMAND_TASK_QUEUE\',\'REQUEST_FOR_DEADLOCK_SEARCH\',\'RESOURCE_QUEUE\',\'SERVER_IDLE_CHECK\',\'SLEEP_DBSTARTUP\',\'SLEEP_DBREPLICATION\',\'SLEEP_MASTERDBREADY\',\'SLEEP_MASTERMDREADY\',\'SLEEP_MASTERUPGRADED\',\'SLEEP_MSDBSTARTUP\',\'SLEEP_TEMPDBSTARTUP\',\'SNI_HTTP_ACCEPT\',\'SP_SERVER_DIAGNOSTICS_SLEEP\',\'SQLTRACE_BUFFER_FLUSH\',\'SQLTRACE_INCREMENTAL_FLUSH_SLEEP\',\'XE_DISPATCHER_WAIT\',\'XE_TIMER_EVENT\') ORDER BY wait_time_ms DESC'},
+  // CPU — DPA type code: CPU
+  {keys:['cpu','processor'],
+   rgType:'Processor (CPU) utilization',        rgCat:'Resources',     match:'direct',  source:'PerformanceDegradation',
+   note:'Machine-level CPU threshold alert. DPA type: CPU.'},
+  // Memory — DPA type code: MEMORY
+  {keys:['memory','ram','buffer cache','page life'],
+   rgType:'OS memory available',                rgCat:'Resources',     match:'direct',  source:'PerformanceDegradation',
+   note:'Machine-level memory threshold alert. DPA type: MEMORY.'},
+  // Disk I/O — DPA type codes: DISK_IO, IO
+  {keys:['disk_io','disk i/o','io utilization','disk io','read/write','io latency'],
+   rgType:'Disk space / avg read-write time',   rgCat:'Resources',     match:'direct',  source:'PerformanceDegradation',
+   note:'Disk Used % + I/O latency alerts. DPA type: DISK_IO.'},
+  // Network — DPA type code: NETWORK
+  {keys:['network'],
+   rgType:'Network utilization',                rgCat:'Resources',     match:'direct',  source:'Custom',
+   note:'Disabled by default in Redgate Monitor v14. DPA type: NETWORK.'},
+  // Query throughput anomaly — DPA type codes: THROUGHPUT, THROUGHPUT_ANOMALY
+  {keys:['throughput_anomaly','throughput','query throughput','query throughput anomaly'],
+   rgType:'Dynamic alerts — Query throughput',  rgCat:'Resources',     match:'direct',  source:'Custom',
+   note:'ML-powered query throughput anomaly (Redgate Monitor v14+). DPA type: THROUGHPUT_ANOMALY.'},
+  // Buffer cache — DPA type code: BUFFER
+  {keys:['buffer','cache hit','hit ratio'],
+   rgType:'Custom metric',                      rgCat:'Resources',     match:'custom',  source:'Custom',
+   note:'SELECT (CAST(SUM(CASE WHEN is_modified = 1 THEN 0 ELSE 1 END) AS FLOAT) / COUNT(*)) * 100 AS buffer_cache_hit_ratio FROM sys.dm_os_buffer_descriptors WHERE database_id = DB_ID()'},
+  // Instance availability — DPA type codes: AVAILABILITY, UNREACHABLE
+  {keys:['availability','unreachable','unavailable','not accessible','down','offline'],
+   rgType:'SQL Server unavailable',             rgCat:'Administrative',match:'direct',  source:'Custom',
+   note:'Instance connectivity / service check. DPA type: AVAILABILITY.'},
+  // Blocking — DPA type code: BLOCKING
+  {keys:['blocking','blocked','blocker'],
+   rgType:'Blocking processes',                 rgCat:'Administrative',match:'direct',  source:'Custom',
+   note:'Head-blocker wait time threshold. DPA type: BLOCKING.'},
+  // Deadlock — DPA type code: DEADLOCK
+  {keys:['deadlock'],
+   rgType:'Deadlock (Extended Events)',         rgCat:'Administrative',match:'direct',  source:'Custom',
+   note:'Event alert with deadlock graph. DPA type: DEADLOCK.'},
+  // Backup — DPA type code: BACKUP
+  {keys:['backup'],
+   rgType:'Backup overdue',                     rgCat:'Administrative',match:'direct',  source:'Custom',
+   note:'Based on backup_finish_date vs interval. DPA type: BACKUP.'},
+  // Agent jobs — DPA type codes: JOB, AGENT_JOB
+  {keys:['agent_job','job_fail','job fail','agent job','job error','job'],
+   rgType:'Job failing',                        rgCat:'Administrative',match:'direct',  source:'Custom',
+   note:'dbo.sysjobhistory failure detection. DPA type: JOB.'},
+  // Configuration / parameter change — DPA type code: CONFIG
+  {keys:['config','parameter change','config change','configuration'],
+   rgType:'SQL Server log entry',               rgCat:'Administrative',match:'partial', source:'Custom',
+   note:'Supplement with Extended Events custom metric. DPA type: CONFIG.'},
+  // Disk space — DPA type code: DISK
+  {keys:['disk_space','disk space','disk capacity','volume','drive'],
+   rgType:'Disk space',                         rgCat:'Administrative',match:'direct',  source:'Custom',
+   note:'Machine-level Disk Used % threshold. DPA type: DISK.'},
+  // HA/DR — DPA type codes: FAILOVER, HA
+  {keys:['failover','ha','availability group','ag failover','cluster fail','cluster'],
+   rgType:'AG / Cluster failover',              rgCat:'Administrative',match:'direct',  source:'Custom',
+   note:'Event alert for HA topology changes. DPA type: FAILOVER.'},
+  // DPA internal health — not available in Redgate Monitor
+  {keys:['dpa monitor error','dpa resource collection','round-trip','roundtrip','probe'],
+   rgType:'NOT AVAILABLE IN REDGATE MONITOR',  rgCat:'DPA Internal',  match:'none',    source:'Custom',
+   note:'DPA internal health or probe alert — no T-SQL equivalent. Cannot be replicated in Redgate Monitor.'},
+  // Custom procedure / SQL
+  {keys:['custom procedure','stored procedure','sproc'],
+   rgType:'Custom metric',                      rgCat:'Custom',        match:'partial', source:'Custom',
+   note:'Wrap proc numeric output in scalar SELECT for Redgate Monitor custom metric.'},
+  {keys:['custom_sql','custom sql','custom alert','boolean','numeric return'],
+   rgType:'Custom metric + alert',              rgCat:'Custom',        match:'direct',  source:'Custom',
+   note:'T-SQL returning single numeric value maps directly to Redgate Monitor custom metric alert.'},
 ];
 
 // ── IDERA SQL Diagnostic Manager alert type mapping ────────────────────────
@@ -1349,7 +1417,93 @@ function handleFileList(fileList) {
   if (zip) { handleZip(zip); return; }
   const conditions = files.filter(f => f.name.toLowerCase().endsWith('.condition'));
   if (conditions.length) { handleConditionFiles(conditions); return; }
+  // DPA native JSON export: one or more .json files (Alerts_*.json, etc.)
+  const jsonFiles = files.filter(f => f.name.toLowerCase().endsWith('.json'));
+  if (jsonFiles.length) { handleDPAJsonFiles(jsonFiles); return; }
   readCSVFile(files[0]);
+}
+
+async function handleDPAJsonFiles(files) {
+  const allAlerts = [], summary = [];
+  let idOffset = 0;
+  for (const f of files) {
+    const text = await f.text();
+    let parsed;
+    try { parsed = JSON.parse(text.replace(/^﻿/, '')); } catch(e) { continue; }
+    // Only handle files that look like DPA alert exports (have .alerts array or .headers.dpaVersion)
+    if (!parsed || (!parsed.alerts && !parsed.headers)) continue;
+    const rows = parseDPAJson(parsed, idOffset);
+    if (rows.length) {
+      summary.push({ name: f.name, fmt: 'dpa-json', count: rows.length });
+      allAlerts.push(...rows);
+      idOffset += rows.length;
+    }
+  }
+  if (!allAlerts.length) {
+    // None of the JSON files were DPA format — fall back
+    alert('No DPA alert definitions found in the selected JSON files. Make sure you export from DPA → Alerts → Export.');
+    return;
+  }
+  finalizeConditionImport(allAlerts, summary);
+}
+
+// Parse a DPA native JSON export object into the internal alert model
+function parseDPAJson(d, idOffset) {
+  const alerts = d.alerts || [];
+  if (!alerts.length) return [];
+  const repoName      = (d.headers && d.headers.repositoryName) || '';
+  const generatedAt   = (d.headers && d.headers.generatedAtTime) || new Date().toISOString();
+  const dpaVersion    = (d.headers && d.headers.dpaVersion) || '';
+
+  return alerts.map((a, i) => {
+    // Severity: derive from alertLevels array if present
+    let severity = 'Medium';
+    const levels = Array.isArray(a.alertLevels) ? a.alertLevels : [];
+    if (levels.length) {
+      const hasHigh   = levels.some(l => /fatal|critical/i.test(l.severity || l.level || ''));
+      const hasMedium = levels.some(l => /warning/i.test(l.severity || l.level || ''));
+      severity = hasHigh ? 'High' : hasMedium ? 'Medium' : 'Low';
+    }
+
+    // Threshold: first alertLevel's value if present
+    let threshold = '';
+    if (levels.length && (levels[0].value !== undefined)) {
+      threshold = String(levels[0].value) + (levels[0].unit ? ' ' + levels[0].unit : '');
+    }
+
+    // Execution interval
+    let intervalStr = '';
+    if (a.executionInterval) {
+      intervalStr = `Eval every ${a.executionInterval.value} ${a.executionInterval.units}`;
+    }
+
+    // alertParameters: summarise key/value pairs
+    let paramStr = '';
+    if (a.alertParameters && typeof a.alertParameters === 'object') {
+      const pairs = Object.entries(a.alertParameters).filter(([,v]) => v !== null && v !== '');
+      if (pairs.length) paramStr = pairs.map(([k,v]) => `${k}=${v}`).join('; ');
+    }
+
+    const message = [intervalStr, paramStr].filter(Boolean).join(' | ');
+
+    return {
+      _id:          idOffset + i,
+      _excluded:    false,
+      _source:      'dpa-json',
+      alertName:    a.name   || `DPA Alert ${i + 1}`,
+      alertType:    a.type   || 'UNKNOWN',
+      severity,
+      instance:     repoName,
+      startTime:    generatedAt,
+      endTime:      '',
+      message,
+      threshold,
+      currentValue: '',
+      status:       a.active === false ? 'Inactive' : 'Active',
+      _dpaVersion:  dpaVersion,
+      _template:    a.template || ''
+    };
+  });
 }
 
 function readCSVFile(f) {
@@ -1376,8 +1530,8 @@ async function handleZip(f) {
   try { zip = await JSZip.loadAsync(f); }
   catch(e) { alert('Could not read ZIP file: ' + e.message); return; }
 
-  const entries = Object.values(zip.files).filter(e => !e.dir && /\.(csv|txt|condition)$/i.test(e.name));
-  if (!entries.length) { alert('No CSV, TXT, or .condition files found inside the ZIP.'); return; }
+  const entries = Object.values(zip.files).filter(e => !e.dir && /\.(csv|txt|condition|json)$/i.test(e.name));
+  if (!entries.length) { alert('No CSV, TXT, .condition, or .json files found inside the ZIP.'); return; }
 
   const allAlerts = [], summary = [];
   let idOffset = 0;
@@ -1390,6 +1544,16 @@ async function handleZip(f) {
       const record = parseConditionJSON(text, idOffset);
       rows = record ? [record] : [];
       fmt = 'ss-condition';
+    } else if (fname.toLowerCase().endsWith('.json')) {
+      let parsed;
+      try { parsed = JSON.parse(text); } catch(e) { rows = []; fmt = 'unknown'; }
+      if (parsed && (parsed.alerts || parsed.headers)) {
+        rows = parseDPAJson(parsed, idOffset);
+        fmt = 'dpa-json';
+      } else {
+        rows = [];
+        fmt = 'unknown';
+      }
     } else {
       fmt = detectFormat(text);
       rows = normalizeCSVText(text, fmt, idOffset);
@@ -1403,12 +1567,13 @@ async function handleZip(f) {
   finalizeConditionImport(allAlerts, summary);
 }
 
-// Shared finalizer for both ZIP and direct .condition file imports
+// Shared finalizer for both ZIP and direct .condition / DPA JSON file imports
 function finalizeConditionImport(allAlerts, summary) {
-  const hasConditions = summary.some(s => s.fmt === 'ss-condition');
-  const ssCount    = summary.filter(s => s.fmt.startsWith('ss')).length;
-  const ideraCount = summary.filter(s => s.fmt === 'idera').length;
-  const dpaCount   = summary.filter(s => s.fmt === 'dpa').length;
+  const hasConditions  = summary.some(s => s.fmt === 'ss-condition');
+  const hasDPAJson     = summary.some(s => s.fmt === 'dpa-json');
+  const ssCount        = summary.filter(s => s.fmt.startsWith('ss')).length;
+  const ideraCount     = summary.filter(s => s.fmt === 'idera').length;
+  const dpaCount       = summary.filter(s => s.fmt === 'dpa' || s.fmt === 'dpa-json').length;
   if (dpaCount >= Math.ceil(summary.length / 2)) {
     sourceMode = 'dpa';
   } else if (ssCount >= Math.ceil(summary.length / 2)) {
@@ -1423,21 +1588,32 @@ function finalizeConditionImport(allAlerts, summary) {
   alerts = allAlerts;
   colHeaders = ['alertName','severity','instance','startTime','endTime','alertType','message','threshold','currentValue','status'];
 
-  const FMT_LABEL = { dpa:'SolarWinds DPA', 'ss-csv':'SQL Sentry (alert log)', 'ss-condition':'SQL Sentry (.condition)', idera:'IDERA' };
+  const FMT_LABEL = { dpa:'SolarWinds DPA (CSV)', 'dpa-json':'SolarWinds DPA (JSON definitions)', 'ss-csv':'SQL Sentry (alert log)', 'ss-condition':'SQL Sentry (.condition)', idera:'IDERA' };
   const fileRows = summary.map(s =>
     `<div style="display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:7px 0;border-bottom:0.5px solid var(--border)">
       <span style="font-size:12px;font-family:monospace;word-break:break-all">${esc(s.name)}</span>
       <span class="badge badge-direct">${FMT_LABEL[s.fmt] || s.fmt}</span>
-      <span style="font-size:12px;color:var(--text2);white-space:nowrap">${s.count} condition${s.count!==1?'s':''}</span>
+      <span style="font-size:12px;color:var(--text2);white-space:nowrap">${s.count} alert${s.count!==1?'s':''}</span>
     </div>`
   ).join('');
   document.getElementById('zipSummaryBody').innerHTML =
     fileRows + `<div style="font-size:12px;color:var(--text2);margin-top:10px;padding-top:8px">
-      <strong style="color:var(--text)">${allAlerts.length}</strong> condition${allAlerts.length!==1?'s':''} from
+      <strong style="color:var(--text)">${allAlerts.length}</strong> alert${allAlerts.length!==1?'s':''} from
       <strong style="color:var(--text)">${summary.length}</strong> file${summary.length!==1?'s':''} — fields auto-mapped below.
     </div>`;
   document.getElementById('zipSummary').classList.remove('hidden');
-  document.getElementById('conditionsNotice').classList.toggle('hidden', !hasConditions);
+
+  // Show notice for .condition files (SS) or DPA JSON definition files
+  const noticeEl = document.getElementById('conditionsNotice');
+  if (hasConditions) {
+    noticeEl.innerHTML = '<strong>SQL Sentry .condition files detected.</strong> Each file is an alert definition (rule), not a triggered instance. Fields extracted: <code>Name</code>, <code>Severity</code>, <code>Tags</code>, <code>Areas</code>, threshold from <code>RuleDefinition</code>, and evaluation frequency. Each condition is mapped to its nearest Redgate Monitor alert type so you can recreate your monitoring setup. To import triggered alert history instead, export from <strong>File → Export Data</strong> in the SQL Sentry Alerts log view.';
+    noticeEl.classList.remove('hidden');
+  } else if (hasDPAJson) {
+    noticeEl.innerHTML = '<strong>DPA native JSON alert definitions detected.</strong> These files are alert configurations (rules), not triggered alert history. Fields extracted: <code>name</code>, <code>type</code>, <code>active</code>, <code>executionInterval</code>, and <code>alertLevels</code>. Each alert is mapped to its nearest Redgate Monitor alert type so you can recreate your monitoring coverage. To export triggered alert history instead, navigate to <strong>Alerts → Alert History</strong> in the DPA web console and export to CSV.';
+    noticeEl.classList.remove('hidden');
+  } else {
+    noticeEl.classList.add('hidden');
+  }
 
   buildMappingUI();
   switchTab(1);
