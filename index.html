@@ -653,6 +653,7 @@
       <button class="source-btn active" id="srcSS"    draggable="true" onclick="setSource('sqlsentry')">SQL Sentry</button>
       <button class="source-btn"        id="srcIDERA" draggable="true" onclick="setSource('idera')">IDERA</button>
       <button class="source-btn"        id="srcDPA"   draggable="true" onclick="setSource('dpa')">DPA</button>
+      <button class="source-btn"        id="srcQuest" draggable="true" onclick="setSource('quest')">Quest Spotlight</button>
     </div>
   </div>
 
@@ -743,6 +744,39 @@
         auto-detects SQL Sentry column names including <code>Target</code> (maps to database
         instance) and <code>Notes</code> (maps to message/description). Remap any column that
         doesn't auto-detect in step 2.
+      </p>
+    </div>
+
+    <!-- Quest Spotlight how-to -->
+    <div class="card hidden" id="howToQuest">
+      <div class="section-title">How to export alarms from Quest Spotlight on SQL Server</div>
+      <p style="font-size:12px;color:var(--text2);line-height:1.8">
+        <strong>Spotlight Enterprise (on-premises):</strong> Open the Spotlight web console or
+        desktop client. Navigate to <strong>History → Alarm History</strong> and set the desired
+        date range. Right-click the alarm grid and choose <strong>Export → Export to CSV</strong>,
+        or use the <strong>Download</strong> icon above the grid. The exported file includes columns:
+        <code>Connection</code> (monitored server), <code>Alarm</code> (alarm name),
+        <code>Severity</code>, <code>Raised</code> (start time), <code>Resolved</code> (end time),
+        <code>Status</code>, <code>Value</code> (current value), and <code>Threshold</code>.
+        Severity levels map as: <strong>Critical → High</strong>, <strong>High → High</strong>,
+        <strong>Medium → Medium</strong>, <strong>Low → Low</strong>, <strong>Informational → Low</strong>.
+        <br><br>
+        <strong>Spotlight Cloud:</strong> Log in at <a href="https://spotlightcloud.io" target="_blank" style="color:inherit">spotlightcloud.io</a>.
+        Go to <strong>Alarms → Alarm History</strong>, filter by connection and date range, then use
+        <strong>Export to CSV</strong>. Column names match the on-premises export.
+        <br><br>
+        <strong>Spotlight-specific alarms with no Redgate Monitor equivalent:</strong>
+        <em>Performance Investigator</em> and <em>Poor Performance Health</em> are Spotlight-proprietary
+        composite scores — no T-SQL equivalent exists. <em>Monitored Server — *</em> alarms are internal
+        Spotlight connectivity/collection health alarms that cannot be recreated. <em>LiteSpeed Backup</em>
+        alarms require Quest LiteSpeed to be installed. <em>Tempdb File Location</em>, <em>Tempdb Growth
+        Settings</em>, and <em>Tempdb Number of Files</em> are configuration-audit alarms that fire once
+        when misconfigured — enforce via policy/DSC rather than ongoing alerting.
+        <br><br>
+        <strong>Threshold unit differences to note:</strong> Spotlight "Backup — Days Since Last Full Backup"
+        is in days → multiply × 24 for Redgate Monitor's hours. Spotlight memory alarms use % — convert to
+        MB available (<code>total_RAM_MB × (1 − pct/100)</code>). Disk "Percentage Used" maps directly to
+        Redgate Monitor "Disk Used %".
       </p>
     </div>
   </div>
@@ -838,9 +872,10 @@
   </div>
 
   <footer>
-    Alert → Redgate Monitor Converter &nbsp;·&nbsp; Not affiliated with SolarWinds or Redgate &nbsp;·&nbsp;
+    Alert → Redgate Monitor Converter &nbsp;·&nbsp; Not affiliated with SolarWinds, Quest, or Redgate &nbsp;·&nbsp;
     <a href="https://documentation.red-gate.com/monitor14" target="_blank" style="color:inherit">Redgate Monitor docs</a> &nbsp;·&nbsp;
-    <a href="https://documentation.solarwinds.com/en/success_center/sqlsentry" target="_blank" style="color:inherit">SQL Sentry docs</a>
+    <a href="https://documentation.solarwinds.com/en/success_center/sqlsentry" target="_blank" style="color:inherit">SQL Sentry docs</a> &nbsp;·&nbsp;
+    <a href="https://help.spotlightessentials.com/sqlserver_alarms" target="_blank" style="color:inherit">Quest Spotlight docs</a>
   </footer>
 </div>
 
@@ -1321,6 +1356,353 @@ const SS_TYPE_MAP = [
   {keys:['general'],                                                         rgType:'Annotation (threshold)',     rgCat:'Administrative',match:'partial', source:'Custom',                 note:'General condition — review and assign specific RG alert type'},
 ];
 
+// ── Quest Spotlight on SQL Server alarm mapping ────────────────────────────
+// Covers Spotlight Enterprise / Spotlight Cloud alarm names as they appear
+// in the CSV alarm history export (Alarm column).  Keys are lowercase
+// substrings matched against the concatenated alarm name + category + message.
+const QUEST_TYPE_MAP = [
+
+  // ── RETIRE — Spotlight-internal or one-shot config-audit alarms ─────────────
+  {keys:['monitored server - sql server alarm action failure','monitored server - sql server alarm evaluation failure','monitored server - sql server collection execution failure','monitored server - sql server host not defined','monitored server - sql server planned outage','monitored server - sql server secondary connection failure','monitored server - sql server unsupported version'],
+   rgType:'RETIRE — Spotlight internal health alarm',  rgCat:'Internal', match:'retire', source:'Custom',
+   note:'These are Spotlight internal connectivity / collection health alarms. Redgate Monitor has built-in agent health monitoring. Retire — do not recreate.'},
+  {keys:['monitored server - windows alarm action failure','monitored server - windows alarm evaluation failure','monitored server - windows collection execution failure','monitored server - windows connection failure','monitored server - windows planned outage','monitored server - windows secondary connection failure','monitored server - windows unsupported version'],
+   rgType:'RETIRE — Spotlight internal health alarm',  rgCat:'Internal', match:'retire', source:'Custom',
+   note:'Spotlight internal Windows collection health alarms. Redgate Monitor self-monitors agent health. Retire — do not recreate.'},
+  {keys:['monitored server - availability group alarm action','monitored server - availability group alarm evaluation','monitored server - availability group collection','monitored server - availability group connection','monitored server - availability group planned outage','monitored server - availability group secondary','monitored server - availability group unsupported'],
+   rgType:'RETIRE — Spotlight internal health alarm',  rgCat:'Internal', match:'retire', source:'Custom',
+   note:'Spotlight internal Availability Group collection health alarms. Redgate Monitor handles connectivity internally. Retire.'},
+  {keys:['missing sql performance counters'],
+   rgType:'RETIRE — environment configuration issue',  rgCat:'Internal', match:'retire', source:'Custom',
+   note:'Fires when SQL performance counters are absent or corrupted — a setup/maintenance issue, not an ongoing operational metric. Fix the WMI / perfmon counters on the host rather than alerting on their absence.'},
+
+  // ── NOT AVAILABLE — no T-SQL equivalent or requires external product ────────
+  {keys:['performance investigator'],
+   rgType:'NOT AVAILABLE IN REDGATE MONITOR', rgCat:'Performance', match:'none', source:'Custom',
+   note:'Spotlight Performance Investigator is a proprietary deep-dive diagnostic score (CPU, memory, I/O, waits composite). No single T-SQL equivalent exists. Use individual Redgate Monitor alerts (CPU, Long running query, Blocking, Disk) and the Overview dashboard for equivalent coverage.'},
+  {keys:['poor performance health'],
+   rgType:'NOT AVAILABLE IN REDGATE MONITOR', rgCat:'Performance', match:'none', source:'Custom',
+   note:'Spotlight composite health score derived from multiple internal metrics. No direct T-SQL equivalent. Covered indirectly by Redgate Monitor Dynamic Alerts (ML-based) in v14+.'},
+  {keys:['litespeed backup failed','litespeed backup warning'],
+   rgType:'NOT AVAILABLE IN REDGATE MONITOR', rgCat:'Backup', match:'none', source:'Custom',
+   note:'Requires Quest LiteSpeed for SQL Server. No T-SQL equivalent in standard SQL Server. If you have LiteSpeed, query LiteSpeed system tables (ls_backupstat). Otherwise switch to native SQL Server backup monitoring via Backup overdue alert in Redgate Monitor.'},
+  {keys:['clusters - file share witness inaccessible'],
+   rgType:'NOT AVAILABLE IN REDGATE MONITOR', rgCat:'Cluster', match:'none', source:'Custom',
+   note:'File Share Witness accessibility is a Windows cluster quorum resource — not accessible via T-SQL. Monitor via Windows Server Failover Cluster Manager, cluster event logs, or OS-level network monitoring.'},
+  {keys:['tempdb file location'],
+   rgType:'NOT AVAILABLE IN REDGATE MONITOR', rgCat:'Configuration', match:'none', source:'Custom',
+   note:'Configuration audit — verifies tempdb files are on a dedicated drive. Fires once when misconfigured. Enforce via build standards / DSC / Group Policy. Not suitable for ongoing alert recreation in Redgate Monitor.'},
+  {keys:['tempdb growth settings'],
+   rgType:'NOT AVAILABLE IN REDGATE MONITOR', rgCat:'Configuration', match:'none', source:'Custom',
+   note:'Configuration audit — verifies tempdb auto-growth is set to fixed MB increments. Enforce via build standards / DSC. Not suitable for ongoing alert recreation in Redgate Monitor.'},
+  {keys:['tempdb number of files'],
+   rgType:'NOT AVAILABLE IN REDGATE MONITOR', rgCat:'Configuration', match:'none', source:'Custom',
+   note:'Configuration audit — verifies tempdb has the recommended number of data files (typically 8 or = core count). Enforce via build standards. Not an ongoing operational alert — do not recreate in Redgate Monitor.'},
+  {keys:['file - exceeded set size'],
+   rgType:'NOT AVAILABLE IN REDGATE MONITOR', rgCat:'Windows', match:'none', source:'Custom',
+   note:'Spotlight Windows alarm that monitors specific file sizes via WMI. No T-SQL equivalent. Use OS monitoring, log management tools, or Windows task scheduler scripts.'},
+  {keys:['windows - up time','windows uptime'],
+   rgType:'NOT AVAILABLE IN REDGATE MONITOR', rgCat:'Windows', match:'none', source:'Custom',
+   note:'Tracks how long the Windows server has been running (detects unexpected restarts). No direct T-SQL equivalent. Monitor via Windows Event Log ID 6005/6006/6008 or an OS monitoring tool.'},
+  {keys:['services - power bi reporting service'],
+   rgType:'NOT AVAILABLE IN REDGATE MONITOR', rgCat:'Services', match:'none', source:'Custom',
+   note:'Power BI Report Server service status — not accessible via standard T-SQL. Monitor via Windows service management (sc.exe) or PowerShell Get-Service, or use the SQL Server log entry alert in Redgate Monitor to catch PBIRS startup/shutdown events in the error log.'},
+  {keys:['paging - file collision'],
+   rgType:'NOT AVAILABLE IN REDGATE MONITOR', rgCat:'Windows', match:'none', source:'Custom',
+   note:'Spotlight-specific alert for paging file path conflicts — a Windows configuration issue. Enforce via OS policy. No T-SQL equivalent in Redgate Monitor.'},
+
+  // ── Backup ─────────────────────────────────────────────────────────────────
+  {keys:['backup - days since last full backup'],
+   rgType:'Backup overdue', rgCat:'Administrative', match:'direct', source:'Custom',
+   note:'Maps directly to Backup overdue alert in Redgate Monitor. Convert threshold: Spotlight days × 24 = Redgate Monitor hours threshold. Set backup type filter to FULL in the alert configuration.'},
+  {keys:['backup - hours since last differential backup'],
+   rgType:'Backup overdue', rgCat:'Administrative', match:'partial', source:'Custom',
+   note:'Partial match — Backup overdue in Redgate Monitor covers full/differential/log. Set threshold in hours to match Spotlight threshold. Redgate Monitor does not currently distinguish differential from log backups in the alert type — verify coverage with msdb.dbo.backupset.'},
+  {keys:['backup - minutes since last log backup'],
+   rgType:'Backup overdue', rgCat:'Administrative', match:'partial', source:'Custom',
+   note:'Partial match — Backup overdue in Redgate Monitor covers log backups. Convert threshold: Spotlight minutes ÷ 60 = Redgate Monitor hours. Recommended threshold for log backups: 1–4 hours (0.02–0.07 days) depending on RPO.'},
+
+  // ── Cluster ────────────────────────────────────────────────────────────────
+  {keys:['clusters - failed over','cluster failed over'],
+   rgType:'AG / Cluster failover', rgCat:'Administrative', match:'direct', source:'Custom',
+   note:'Maps directly to AG / Cluster failover alert in Redgate Monitor. Fires on Windows Server Failover Cluster (WSFC) node ownership change.'},
+  {keys:['clusters - node unavailable'],
+   rgType:'AG / Cluster failover', rgCat:'Administrative', match:'partial', source:'Custom',
+   note:'Partial match — Redgate Monitor AG / Cluster failover alert detects topology changes including node unavailability. For node-level detail: SELECT NodeName, status_description FROM sys.dm_os_cluster_nodes.'},
+  {keys:['clusters - non-preferred node','non-preferred node'],
+   rgType:'AG / Cluster failover', rgCat:'Administrative', match:'partial', source:'Custom',
+   note:'Partial match — Redgate Monitor alerts on failover events. To detect non-preferred node ownership: SELECT NodeName FROM sys.dm_os_cluster_nodes WHERE is_current_owner = 1 — compare against expected preferred node name.'},
+
+  // ── Compilation ────────────────────────────────────────────────────────────
+  {keys:['compiles - percentage recompilations','percentage recompilations','recompilation'],
+   rgType:'Custom metric', rgCat:'Resources', match:'custom', source:'Custom',
+   note:"SELECT cntr_value FROM sys.dm_os_performance_counters WHERE counter_name = 'SQL Re-Compilations/sec' AND object_name LIKE '%SQL Statistics%' — alert when re-compiles/sec > 15% of SQL Compilations/sec; indicates unstable execution plans or excessive sp_recompile usage"},
+
+  // ── Databases ──────────────────────────────────────────────────────────────
+  {keys:['databases - data file group about to grow','data file group about to grow','file group about to grow'],
+   rgType:'Disk space', rgCat:'Administrative', match:'partial', source:'Custom',
+   note:'Partial match — Spotlight predicts auto-growth imminence. Redgate Monitor Disk space alert fires on current Used %. Supplement with custom metric: SELECT name, (max_size - size)*8/1024 AS space_remaining_mb FROM sys.master_files WHERE growth > 0 — alert when space_remaining_mb < (growth * 8 / 1024) * 2.'},
+  {keys:['databases - data file group space used','data file group space used'],
+   rgType:'Disk space', rgCat:'Administrative', match:'direct', source:'Custom',
+   note:'Maps directly to Disk space alert in Redgate Monitor. Configure as Disk Used % per data file or filegroup. SELECT name, CAST(FILEPROPERTY(name,\'SpaceUsed\')*8192 AS FLOAT)/CAST(size*8192 AS FLOAT)*100 AS pct_used FROM sys.database_files.'},
+  {keys:['databases - dynamic data file group growths remaining','dynamic data file group growths remaining'],
+   rgType:'Custom metric', rgCat:'Administrative', match:'custom', source:'Custom',
+   note:'SELECT DB_NAME(database_id) AS db_name, name, CASE WHEN max_size = -1 THEN 999999 ELSE (max_size - size) / NULLIF(growth, 0) END AS growths_remaining FROM sys.master_files WHERE type_desc = \'ROWS\' AND growth > 0 — alert when growths_remaining < 3'},
+  {keys:['databases - dynamic log file growths remaining','dynamic log file growths remaining'],
+   rgType:'Custom metric', rgCat:'Administrative', match:'custom', source:'Custom',
+   note:'SELECT DB_NAME(database_id) AS db_name, name, CASE WHEN max_size = -1 THEN 999999 ELSE (max_size - size) / NULLIF(growth, 0) END AS growths_remaining FROM sys.master_files WHERE type_desc = \'LOG\' AND growth > 0 — alert when growths_remaining < 3; low remaining growths risk a full transaction log halt'},
+  {keys:['databases - log file space used','log file space used'],
+   rgType:'Disk space', rgCat:'Administrative', match:'direct', source:'Custom',
+   note:'Maps to Disk space alert in Redgate Monitor (Disk Used %). Configure on transaction log file utilization. SELECT name, log_reuse_wait_desc FROM sys.databases to investigate why log is not truncating.'},
+  {keys:['databases - log flush wait time','log flush wait time'],
+   rgType:'Custom metric', rgCat:'Resources', match:'custom', source:'Custom',
+   note:"SELECT cntr_value FROM sys.dm_os_performance_counters WHERE counter_name = 'Log Flush Wait Time' AND object_name LIKE '%Databases%' — alert when > 10ms per flush; indicates I/O subsystem latency on transaction log drive. Pair with Disk avg read-write time alert."},
+  {keys:['databases - sql i/o errors','sql i/o errors','database sql io errors'],
+   rgType:'SQL Server log entry', rgCat:'Administrative', match:'partial', source:'Custom',
+   note:'Partial match — Redgate Monitor SQL Server log entry alert with keyword filter "I/O error" or "823"/"824"/"825" captures SQL I/O errors. These are written to the error log. Severity 823/824/825 errors are critical — escalate immediately.'},
+  {keys:['databases - unavailable'],
+   rgType:'SQL Server unavailable', rgCat:'Administrative', match:'direct', source:'Custom',
+   note:'Maps directly to SQL Server unavailable alert in Redgate Monitor (database offline/suspect/inaccessible). Also check: SELECT name, state_desc FROM sys.databases WHERE state_desc <> \'ONLINE\'.'},
+
+  // ── Error Log ──────────────────────────────────────────────────────────────
+  {keys:['error log - critical error','error log - fatal','error log - high severity','error log - error count'],
+   rgType:'SQL Server log entry', rgCat:'Administrative', match:'partial', source:'Custom',
+   note:'Maps to SQL Server log entry alert in Redgate Monitor. Configure keyword pattern matching for severity 16+ errors. Redgate Monitor uses text pattern matching rather than severity-level detection — supplement with Extended Events audit session for fine-grained severity filtering.'},
+  {keys:['error log - information severity','error log - low severity','error log - medium severity'],
+   rgType:'SQL Server log entry', rgCat:'Administrative', match:'partial', source:'Custom',
+   note:'Maps to SQL Server log entry alert in Redgate Monitor. Lower severity error log alerts generate high noise in most environments — tune keyword patterns carefully (e.g., filter for "error", "failed", "corruption") to reduce alert fatigue.'},
+
+  // ── I/O ────────────────────────────────────────────────────────────────────
+  {keys:['i/o stall time','io stall time','i/o stall','io stall'],
+   rgType:'Disk space / avg read-write time', rgCat:'Resources', match:'direct', source:'PerformanceDegradation',
+   note:'Maps to avg read-write time alert in Redgate Monitor. I/O stall benchmarks: <10ms=fast, 10–20ms=acceptable, 20–50ms=slow, >50ms=critical. Transaction log stall target: <2ms. Query detailed stalls: SELECT * FROM sys.dm_io_virtual_file_stats(NULL, NULL).'},
+  {keys:['index fragmentation status','index fragmentation'],
+   rgType:'Custom metric', rgCat:'Custom', match:'custom', source:'Custom',
+   note:"SELECT DB_NAME(database_id) AS db_name, OBJECT_NAME(object_id) AS tbl, index_id, avg_fragmentation_in_percent FROM sys.dm_db_index_physical_stats(DB_ID(), NULL, NULL, NULL, 'LIMITED') WHERE avg_fragmentation_in_percent > 30 AND page_count > 1000 — alert when count > 0; schedule rebuild/reorganize maintenance accordingly"},
+
+  // ── Latch ──────────────────────────────────────────────────────────────────
+  {keys:['latch - total wait time rate','latch wait time','latch total wait'],
+   rgType:'Custom metric', rgCat:'Resources', match:'custom', source:'Custom',
+   note:'SELECT SUM(wait_time_ms) AS total_latch_wait_ms, SUM(waiting_requests_count) AS total_latch_waits FROM sys.dm_os_latch_stats WHERE latch_class NOT IN (\'CMED_HASH_SET\',\'CMED_QSCAN\') — alert when rate-of-change exceeds baseline; high latch waits often indicate hot pages or tempdb PFS/GAM contention'},
+
+  // ── Locks ──────────────────────────────────────────────────────────────────
+  {keys:['locks - blocked processes','blocked processes'],
+   rgType:'Blocking processes', rgCat:'Administrative', match:'direct', source:'Custom',
+   note:'Maps directly to Blocking processes alert in Redgate Monitor. Set the head-blocker wait time threshold to match the Spotlight threshold in seconds. Redgate Monitor queries sys.dm_exec_requests for blocking chains on every collection cycle.'},
+  {keys:['locks - deadlocks','deadlocks'],
+   rgType:'Deadlock (Extended Events)', rgCat:'Administrative', match:'direct', source:'Custom',
+   note:'Maps directly to Deadlock alert in Redgate Monitor (Extended Events). Captures full deadlock graph XML. Redgate Monitor stores the deadlock XML in its repository for post-incident analysis.'},
+
+  // ── Log Shipping ───────────────────────────────────────────────────────────
+  {keys:['log shipping - primary backup job'],
+   rgType:'Job failing', rgCat:'Administrative', match:'partial', source:'Custom',
+   note:'Partial match — Redgate Monitor Job failing alert covers SQL Agent job failures including log shipping backup jobs. Alert on failure of the log shipping backup job by name in msdb.dbo.sysjobhistory.'},
+  {keys:['log shipping - secondary job'],
+   rgType:'Job failing', rgCat:'Administrative', match:'partial', source:'Custom',
+   note:'Partial match — covers secondary copy/restore SQL Agent jobs. Alert on failure by job name. For latency monitoring, pair with the Log Shipping latency custom metric below.'},
+  {keys:['log shipping - secondary latency','log shipping secondary latency'],
+   rgType:'Custom metric', rgCat:'Administrative', match:'custom', source:'Custom',
+   note:"SELECT secondary_server, secondary_database, last_restored_latency AS latency_minutes FROM msdb.dbo.log_shipping_monitor_secondary — alert when latency_minutes exceeds RPO threshold; typical thresholds: 15 min = warn, 60 min = critical"},
+
+  // ── Memory (SQL Server level) ──────────────────────────────────────────────
+  {keys:['memory - free system page table entries','free system page table entries'],
+   rgType:'Custom metric', rgCat:'Resources', match:'custom', source:'Custom',
+   note:"SELECT cntr_value AS free_ptes FROM sys.dm_os_performance_counters WHERE counter_name = 'Free System Page Table Entries' AND object_name = 'Memory' — alert when < 5000; exhausted PTEs cause OS instability. Also query sys.dm_os_sys_memory."},
+  {keys:['memory - page life expectancy','page life expectancy'],
+   rgType:'Custom metric', rgCat:'Resources', match:'custom', source:'Custom',
+   note:"SELECT cntr_value AS ple FROM sys.dm_os_performance_counters WHERE counter_name = 'Page life expectancy' AND object_name LIKE '%Buffer Manager%' — alert when PLE < (total_buffer_pool_gb / 4) * 300 (4 GB/300 s rule). For NUMA systems check per-node PLE via '%Buffer Node%'."},
+  {keys:['memory - percentage free virtual memory','percentage free virtual memory'],
+   rgType:'OS memory available', rgCat:'Resources', match:'partial', source:'PerformanceDegradation',
+   note:'Partial match — Spotlight alerts on % free virtual memory; Redgate Monitor alerts on MB available physical memory. Convert: alert when available_physical_memory_mb < total_RAM_MB × (spotlight_threshold_pct / 100). Query: SELECT available_physical_memory_kb/1024 AS avail_mb FROM sys.dm_os_sys_memory.'},
+  {keys:['memory - physical memory available','physical memory available'],
+   rgType:'OS memory available', rgCat:'Resources', match:'direct', source:'PerformanceDegradation',
+   note:'Maps directly to OS memory available alert in Redgate Monitor. Spotlight uses MB; Redgate Monitor also uses MB. Set the same threshold value directly.'},
+
+  // ── Mirroring ──────────────────────────────────────────────────────────────
+  {keys:['mirroring - failedover','mirroring failedover','mirroring - failed over'],
+   rgType:'AG / Cluster failover', rgCat:'Administrative', match:'direct', source:'Custom',
+   note:'Maps to AG / Cluster failover alert in Redgate Monitor. Note: database mirroring is deprecated since SQL Server 2012 — migrate to Always On Availability Groups if still in use.'},
+  {keys:['mirroring - state','mirroring state'],
+   rgType:'AG / Cluster failover', rgCat:'Administrative', match:'partial', source:'Custom',
+   note:'Partial match — Redgate Monitor detects failover events; for mirroring state health: SELECT db_name(database_id), mirroring_state_desc, mirroring_role_desc FROM sys.database_mirroring WHERE mirroring_guid IS NOT NULL — alert when mirroring_state_desc <> \'SYNCHRONIZED\'.'},
+  {keys:['mirroring - unrestored log','mirroring unrestored log','mirroring - unsent log','mirroring unsent log'],
+   rgType:'Custom metric', rgCat:'Administrative', match:'custom', source:'Custom',
+   note:'SELECT DB_NAME(database_id), mirroring_send_queue_size, mirroring_redo_queue_size FROM sys.database_mirroring WHERE mirroring_guid IS NOT NULL AND (mirroring_send_queue_size > 3072 OR mirroring_redo_queue_size > 3072) — threshold: 3 MB (3072 KB) indicates growing lag'},
+
+  // ── Network ────────────────────────────────────────────────────────────────
+  {keys:['network - percentage bandwidth','network percentage bandwidth','network bandwidth'],
+   rgType:'Network utilization', rgCat:'Resources', match:'direct', source:'Custom',
+   note:'Maps to Network utilization alert in Redgate Monitor. Disabled by default in v14+ — enable under Configuration → Alert types. Redgate Monitor measures bytes in/out per second; convert Spotlight % bandwidth threshold to a rate if needed.'},
+  {keys:['network - sql server packets error rate','sql server packets error rate','packets error rate'],
+   rgType:'Custom metric', rgCat:'Resources', match:'custom', source:'Custom',
+   note:"SELECT cntr_value FROM sys.dm_os_performance_counters WHERE counter_name = 'Packet Errors/sec' AND object_name LIKE '%SQL Server:General Statistics%' — alert when > 0; network packet errors indicate NIC or switch problems. Also query sys.dm_os_ring_buffers for connectivity failures."},
+
+  // ── Paging (Windows) ───────────────────────────────────────────────────────
+  {keys:['paging - disk activity','paging disk activity'],
+   rgType:'Custom metric', rgCat:'Resources', match:'custom', source:'Custom',
+   note:'SELECT page_fault_count, memory_utilization_percentage FROM sys.dm_os_process_memory — alert when page_fault_count rate-of-change is high or memory_utilization_percentage drops; indicates SQL Server is being paged out to disk (critical performance emergency). Supplement with OS-level monitoring.'},
+
+  // ── Services ───────────────────────────────────────────────────────────────
+  {keys:['services - dtc service status','dtc service status'],
+   rgType:'Custom metric', rgCat:'Administrative', match:'custom', source:'Custom',
+   note:'SELECT COUNT(*) FROM sys.dm_tran_distributed_transaction_details — alert when DTC distributed transaction count is unexpectedly high. DTC service status itself is not T-SQL accessible; monitor via SQL Server log entry alert for DTC-related error messages (Error 8522, 8525).'},
+  {keys:['services - full text search','full text search service'],
+   rgType:'Custom metric', rgCat:'Administrative', match:'custom', source:'Custom',
+   note:"SELECT FULLTEXTSERVICEPROPERTY('IsFullTextInstalled') AS ft_installed, COUNT(*) AS error_catalogs FROM sys.fulltext_catalogs WHERE has_crawl_completed = 1 AND crawl_end_date IS NULL — query sys.fulltext_index_catalog_usages for health. Monitor via SQL Server log entry alert for Full-Text crawl errors."},
+  {keys:['services - integration service status','integration service status','ssis service'],
+   rgType:'Custom metric', rgCat:'Administrative', match:'custom', source:'Custom',
+   note:'SELECT COUNT(*) FROM msdb.dbo.sysssispackages — SSIS service status is not T-SQL accessible. Monitor SSIS package execution via msdb.dbo.sysssis_executionlog; alert on failed executions. Use SQL Server log entry alert for SSIS service startup/shutdown events.'},
+  {keys:['services - sql server reporting service','ssrs service','reporting service status'],
+   rgType:'Custom metric', rgCat:'Administrative', match:'custom', source:'Custom',
+   note:'SSRS service status is not accessible via T-SQL. Monitor via SQL Server log entry alert for SSRS startup/shutdown messages. For SSRS health metrics (subscriptions, report execution errors) query the SSRS ReportServer database: SELECT TOP 100 * FROM dbo.ExecutionLog3 WHERE Status = \'rsRenderingError\'.'},
+  {keys:['services - sql agent mail status','sql agent mail status'],
+   rgType:'Custom metric', rgCat:'Administrative', match:'custom', source:'Custom',
+   note:"SELECT is_broker_enabled, name FROM sys.databases WHERE name = 'msdb' — Database Mail status: SELECT COUNT(*) FROM msdb.dbo.sysmail_event_log WHERE log_date > DATEADD(HOUR,-1,GETDATE()) AND event_type = 'error' — alert when > 0. Also check SQL Server Agent status via sys.dm_exec_sessions."},
+  {keys:['services - service not running','service not running'],
+   rgType:'Custom metric', rgCat:'Administrative', match:'partial', source:'Custom',
+   note:'Partial match — Spotlight monitors arbitrary Windows services; Redgate Monitor cannot directly check Windows service state via T-SQL. Use SQL Server log entry alert for known service stop/start events. For critical services (MSSQLSERVER, SQLSERVERAGENT), use SQL Server unavailable and Job failing alerts as proxies.'},
+
+  // ── SQL Execution ──────────────────────────────────────────────────────────
+  {keys:['sql - long running sql','long running sql'],
+   rgType:'Long running query', rgCat:'Wait Time', match:'direct', source:'Custom',
+   note:'Maps directly to Long running query alert in Redgate Monitor. Set elapsed time threshold in milliseconds to match Spotlight threshold. Redgate Monitor queries sys.dm_exec_requests for in-flight queries on each collection cycle.'},
+  {keys:['sql - running out of threads','running out of threads'],
+   rgType:'Custom metric', rgCat:'Resources', match:'custom', source:'Custom',
+   note:"SELECT max_workers_count, COUNT(*) AS current_workers FROM sys.dm_os_sys_info CROSS JOIN sys.dm_os_workers WHERE state = 'RUNNABLE' GROUP BY max_workers_count — alert when current_workers/max_workers_count > 0.90; also SELECT cntr_value FROM sys.dm_os_performance_counters WHERE counter_name = 'Blocked tasks' AND object_name LIKE '%General Statistics%'"},
+
+  // ── SQL Agent ──────────────────────────────────────────────────────────────
+  {keys:['sql agent - alerts','sql agent alerts'],
+   rgType:'SQL Server log entry', rgCat:'Administrative', match:'partial', source:'Custom',
+   note:'SQL Agent alerts fire on error log entries or WMI events. Partial match via SQL Server log entry alert in Redgate Monitor — configure keyword patterns matching your SQL Agent alert conditions. For event-based SQL Agent alerts, Extended Events provides more reliable capture.'},
+  {keys:['sql agent - jobs failed','sql agent jobs failed'],
+   rgType:'Job failing', rgCat:'Administrative', match:'direct', source:'Custom',
+   note:'Maps directly to Job failing alert in Redgate Monitor. Covers all SQL Agent job failures via msdb.dbo.sysjobhistory. Set threshold to 0 failures (any failure triggers alert). Redgate Monitor checks on every collection cycle.'},
+  {keys:['sql agent - long running jobs (percent)','sql agent long running jobs percent'],
+   rgType:'Long running query', rgCat:'Wait Time', match:'partial', source:'Custom',
+   note:'Partial match — Long running query in Redgate Monitor covers queries, not specifically SQL Agent jobs. For job duration: SELECT job_id, DATEDIFF(MINUTE, start_execution_date, GETDATE()) AS duration_min FROM msdb.dbo.sysjobactivity WHERE stop_execution_date IS NULL AND DATEDIFF(MINUTE, start_execution_date, GETDATE()) > threshold.'},
+  {keys:['sql agent - long running jobs (time)','sql agent long running jobs time'],
+   rgType:'Long running query', rgCat:'Wait Time', match:'partial', source:'Custom',
+   note:'Partial match — for job elapsed time: SELECT ja.job_id, j.name, DATEDIFF(SECOND, ja.start_execution_date, GETDATE()) AS elapsed_sec FROM msdb.dbo.sysjobactivity ja JOIN msdb.dbo.sysjobs j ON ja.job_id = j.job_id WHERE ja.stop_execution_date IS NULL AND ja.start_execution_date IS NOT NULL — alert when elapsed_sec > threshold.'},
+  {keys:['sql agent - status','sql agent status'],
+   rgType:'SQL Server unavailable', rgCat:'Administrative', match:'partial', source:'Custom',
+   note:'Partial match — no dedicated SQL Agent service status alert in Redgate Monitor. SQL Agent being stopped is visible via Job failing alert (all jobs stop running) and SQL Server log entry alert (Agent startup/shutdown in error log). Check: SELECT dss.status_desc FROM sys.dm_server_services dss WHERE servicename LIKE \'%Agent%\'.'},
+
+  // ── SQL Custom / VLF ───────────────────────────────────────────────────────
+  {keys:['sql custom counters','sql custom counter'],
+   rgType:'Custom metric', rgCat:'Custom', match:'custom', source:'Custom',
+   note:'Spotlight custom counter alerts map to Redgate Monitor custom metric alerts. Recreate each counter\'s T-SQL query in Redgate Monitor under Configuration → Custom metrics and alerts. The custom metric must return a single scalar numeric value.'},
+  {keys:['sql virtual log files count','virtual log files count','vlf count'],
+   rgType:'Custom metric', rgCat:'Advisory', match:'custom', source:'Custom',
+   note:"SELECT DB_NAME(database_id) AS db_name, COUNT(*) AS vlf_count FROM sys.dm_db_log_info(NULL) GROUP BY database_id HAVING COUNT(*) > 1000 — alert when > 1000 VLFs per database. Excessive VLFs slow database startup and log backup. Fix: shrink log file, then regrow with one large fixed increment."},
+
+  // ── Tempdb ─────────────────────────────────────────────────────────────────
+  {keys:['tempdb auto growth','tempdb autogrowth'],
+   rgType:'Disk space', rgCat:'Administrative', match:'partial', source:'Custom',
+   note:'Partial match — Redgate Monitor Disk space alert fires on tempdb space usage. Spotlight specifically detects auto-growth events. Supplement with SQL Server log entry alert (keyword "autogrew") to detect growth events. Proactively pre-size tempdb to avoid autogrowth altogether.'},
+  {keys:['tempdb contention'],
+   rgType:'Custom metric', rgCat:'Custom', match:'custom', source:'Custom',
+   note:"SELECT SUM(wait_time_ms) AS latch_wait_ms FROM sys.dm_os_wait_stats WHERE wait_type IN ('PAGELATCH_UP','PAGELATCH_EX','PAGELATCH_SH') AND resource_description LIKE '2:%' — tempdb PFS/GAM/SGAM contention. Alert when latch_wait_ms rate-of-change > threshold. Fix: add tempdb files up to core count (max 8)."},
+  {keys:['tempdb file size'],
+   rgType:'Disk space', rgCat:'Administrative', match:'direct', source:'Custom',
+   note:'Maps to Disk space alert in Redgate Monitor. Configure on tempdb data file usage. SELECT SUM(allocated_extent_page_count)*8/1024 AS tempdb_used_mb, SUM(unallocated_extent_page_count)*8/1024 AS tempdb_free_mb FROM sys.dm_db_file_space_usage.'},
+  {keys:['tempdb version store generation rate','version store generation rate'],
+   rgType:'Custom metric', rgCat:'Custom', match:'custom', source:'Custom',
+   note:"SELECT cntr_value AS version_generation_rate FROM sys.dm_os_performance_counters WHERE counter_name = 'Version Generation rate (KB/s)' AND object_name LIKE '%Transactions%' — alert when > 1024 KB/s sustained; indicates heavy SNAPSHOT or RCSI usage growing the version store rapidly"},
+  {keys:['tempdb version store size','version store size'],
+   rgType:'Custom metric', rgCat:'Custom', match:'custom', source:'Custom',
+   note:'SELECT SUM(version_store_reserved_page_count)*8/1024 AS version_store_mb FROM sys.dm_db_file_space_usage — alert when > threshold MB. Version store growth causes tempdb to expand and is typically caused by long-running SNAPSHOT transactions or uncommitted transactions.'},
+
+  // ── User ───────────────────────────────────────────────────────────────────
+  {keys:['user - connection count','connection count'],
+   rgType:'Custom metric', rgCat:'Resources', match:'custom', source:'Custom',
+   note:"SELECT COUNT(*) AS user_connections FROM sys.dm_exec_sessions WHERE is_user_process = 1 — compare against: SELECT value_in_use FROM sys.configurations WHERE name = 'max connections'; alert when connections approach configured maximum"},
+  {keys:['user - logins per second','logins per second'],
+   rgType:'Custom metric', rgCat:'Resources', match:'custom', source:'Custom',
+   note:"SELECT cntr_value AS logins_per_sec FROM sys.dm_os_performance_counters WHERE counter_name = 'Logins/sec' AND object_name LIKE '%General Statistics%' — alert when abnormally high (connection pool churning, authentication storms). Typical healthy rate: < 200/sec for most workloads."},
+  {keys:['user - response time','response time'],
+   rgType:'Custom metric', rgCat:'Resources', match:'custom', source:'Custom',
+   note:"SELECT AVG(avg_elapsed_time / 1000.0) AS avg_response_ms FROM sys.dm_exec_query_stats WHERE last_execution_time > DATEADD(MINUTE,-5,GETDATE()) — Spotlight measures a synthetic probe response time; Redgate Monitor measures actual query elapsed time. These are approximate equivalents for average workload response time."},
+
+  // ── Windows CPU ────────────────────────────────────────────────────────────
+  {keys:['cpu - average cpu usage','average cpu usage'],
+   rgType:'Processor (CPU) utilization', rgCat:'Resources', match:'direct', source:'PerformanceDegradation',
+   note:'Maps directly to Processor (CPU) utilization alert in Redgate Monitor. Machine-level CPU % threshold. Same semantic as Spotlight CPU - Average CPU Usage.'},
+  {keys:['cpu - individual cpu usage','individual cpu usage'],
+   rgType:'Processor (CPU) utilization', rgCat:'Resources', match:'partial', source:'PerformanceDegradation',
+   note:'Partial match — Redgate Monitor alerts on overall machine CPU %. Per-core CPU usage requires OS monitoring (WMI/PerfMon). Use threshold = (100 / cpu_core_count) as a proxy for single-core saturation detection.'},
+  {keys:['cpu - processor queue length','processor queue length'],
+   rgType:'Custom metric', rgCat:'Resources', match:'custom', source:'Custom',
+   note:'SELECT AVG(runnable_tasks_count) AS avg_runnable FROM sys.dm_os_schedulers WHERE scheduler_id < 255 AND is_online = 1 — alert when avg > 10; approximates OS processor queue length. Full OS queue length requires WMI (Win32_PerfFormattedData_PerfOS_System.ProcessorQueueLength).'},
+
+  // ── Windows Disks ──────────────────────────────────────────────────────────
+  {keys:['disks - percentage used','disks - free space','disk percentage used','disk free space'],
+   rgType:'Disk space', rgCat:'Administrative', match:'direct', source:'Custom',
+   note:'Maps directly to Disk space alert in Redgate Monitor (Disk Used %). Spotlight "Percentage Used" = 100 - "Free Percent"; set threshold accordingly. Applies to all volumes on the monitored host.'},
+  {keys:['disk queue length','disks - queue length'],
+   rgType:'Disk space / avg read-write time', rgCat:'Resources', match:'partial', source:'PerformanceDegradation',
+   note:'Partial match — Redgate Monitor avg read-write time alert captures I/O pressure. Disk Queue Length > 2 per spindle indicates I/O saturation. SELECT SUM(io_stall)/NULLIF(SUM(num_of_reads+num_of_writes),0) AS avg_stall_ms FROM sys.dm_io_virtual_file_stats(NULL,NULL) as a T-SQL proxy.'},
+  {keys:['disks - transfer time','disk transfer time'],
+   rgType:'Disk space / avg read-write time', rgCat:'Resources', match:'direct', source:'PerformanceDegradation',
+   note:'Maps to avg read-write time alert in Redgate Monitor. Transfer time benchmarks: <10ms=fast, 10–20ms=acceptable, 20–50ms=slow, >50ms=critical. Transaction log drive: target <2ms.'},
+
+  // ── Windows Memory ─────────────────────────────────────────────────────────
+  {keys:['memory - percentage free physical memory','percentage free physical memory'],
+   rgType:'OS memory available', rgCat:'Resources', match:'direct', source:'PerformanceDegradation',
+   note:'Maps to OS memory available alert in Redgate Monitor. Convert: alert when available_physical_memory_mb < total_RAM_MB × (threshold_pct / 100). SELECT physical_memory_in_use_kb/1024 AS in_use_mb, available_physical_memory_kb/1024 AS available_mb FROM sys.dm_os_sys_info CROSS JOIN sys.dm_os_sys_memory.'},
+
+  // ── Availability Groups ────────────────────────────────────────────────────
+  {keys:['availability group - failed over','availability group failed over'],
+   rgType:'AG / Cluster failover', rgCat:'Administrative', match:'direct', source:'Custom',
+   note:'Maps directly to AG / Cluster failover alert in Redgate Monitor. Fires on primary replica role change in an Always On Availability Group.'},
+  {keys:['availability group - failover availability','failover availability'],
+   rgType:'AG / Cluster failover', rgCat:'Administrative', match:'partial', source:'Custom',
+   note:'Partial match — Redgate Monitor detects actual failovers. For failover readiness: SELECT ag.name, ar.replica_server_name, ars.role_desc, ars.synchronization_health_desc FROM sys.availability_replicas ar JOIN sys.availability_groups ag ON ar.group_id = ag.group_id JOIN sys.dm_hadr_availability_replica_states ars ON ar.replica_id = ars.replica_id — alert when synchronization_health_desc <> \'HEALTHY\'.'},
+  {keys:['availability group - quorum failure imminent','quorum failure imminent'],
+   rgType:'Custom metric', rgCat:'Administrative', match:'custom', source:'Custom',
+   note:'SELECT COUNT(*) AS votes_current, quorum_state_desc FROM sys.dm_hadr_cluster_members CROSS JOIN sys.dm_hadr_cluster WHERE member_state_desc = \'DOWN\' GROUP BY quorum_state_desc — alert when any DOWN member would cause quorum loss. Quorum state 1 = NORMAL, 2 = FORCED (degraded), 3 = FAILED.'},
+  {keys:['availability group - synchronization health','synchronization health'],
+   rgType:'Custom metric', rgCat:'Administrative', match:'custom', source:'Custom',
+   note:'SELECT ag.name, drs.database_id, drs.synchronization_state_desc, drs.synchronization_health_desc, drs.redo_queue_size, drs.send_queue_size FROM sys.dm_hadr_database_replica_states drs JOIN sys.availability_groups ag ON drs.group_id = ag.group_id — alert when synchronization_health_desc <> \'HEALTHY\' or redo_queue_size > 3072 (3 MB)'},
+
+  // ── Generic fallbacks (match broad Spotlight category terms last) ────────
+  {keys:['backup'],
+   rgType:'Backup overdue', rgCat:'Administrative', match:'direct', source:'Custom',
+   note:'Backup overdue alert — configure threshold in hours to match Spotlight threshold (days × 24, minutes ÷ 60).'},
+  {keys:['deadlock'],
+   rgType:'Deadlock (Extended Events)', rgCat:'Administrative', match:'direct', source:'Custom',
+   note:'Deadlock detection via Extended Events in Redgate Monitor.'},
+  {keys:['blocking','blocked'],
+   rgType:'Blocking processes', rgCat:'Administrative', match:'direct', source:'Custom',
+   note:'Head-blocker wait time threshold in Redgate Monitor.'},
+  {keys:['cpu','processor'],
+   rgType:'Processor (CPU) utilization', rgCat:'Resources', match:'direct', source:'PerformanceDegradation',
+   note:'Machine-level CPU utilization threshold.'},
+  {keys:['memory'],
+   rgType:'OS memory available', rgCat:'Resources', match:'direct', source:'PerformanceDegradation',
+   note:'Machine-level memory available threshold.'},
+  {keys:['disk space','disk used','drive capacity'],
+   rgType:'Disk space', rgCat:'Administrative', match:'direct', source:'Custom',
+   note:'Disk used % threshold alert.'},
+  {keys:['disk','i/o','io','latency','stall'],
+   rgType:'Disk space / avg read-write time', rgCat:'Resources', match:'direct', source:'PerformanceDegradation',
+   note:'Disk I/O latency or space threshold alert.'},
+  {keys:['job fail','agent job','sql agent'],
+   rgType:'Job failing', rgCat:'Administrative', match:'direct', source:'Custom',
+   note:'SQL Agent job failure detection.'},
+  {keys:['availability group','cluster','failover','replica'],
+   rgType:'AG / Cluster failover', rgCat:'Administrative', match:'direct', source:'Custom',
+   note:'HA/DR topology change event alert.'},
+  {keys:['long running','slow query','elapsed time'],
+   rgType:'Long running query', rgCat:'Wait Time', match:'direct', source:'Custom',
+   note:'Elapsed time threshold for in-flight queries.'},
+  {keys:['error log','log entry'],
+   rgType:'SQL Server log entry', rgCat:'Administrative', match:'partial', source:'Custom',
+   note:'SQL Server error log pattern alert.'},
+  {keys:['unavailable','unreachable','offline','connection failure'],
+   rgType:'SQL Server unavailable', rgCat:'Administrative', match:'direct', source:'Custom',
+   note:'SQL Server instance connectivity check.'},
+];
+
 const RG_FIELDS = {
   alertName:'Alert name', severity:'Severity',
   instance:'Database instance', startTime:'Alert start time',
@@ -1335,26 +1717,31 @@ function setSource(mode) {
   document.getElementById('srcSS').classList.toggle('active',    mode === 'sqlsentry');
   document.getElementById('srcIDERA').classList.toggle('active', mode === 'idera');
   document.getElementById('srcDPA').classList.toggle('active',   mode === 'dpa');
+  document.getElementById('srcQuest').classList.toggle('active', mode === 'quest');
   const titles = {
     sqlsentry: 'SQL Sentry → Redgate Monitor',
     idera:     'IDERA → Redgate Monitor',
-    dpa:       'SolarWinds DPA → Redgate Monitor'
+    dpa:       'SolarWinds DPA → Redgate Monitor',
+    quest:     'Quest Spotlight → Redgate Monitor'
   };
   const descs = {
     sqlsentry: 'Convert SolarWinds SQL Sentry alert exports into Redgate Monitor–ready PowerShell modules, webhook JSON, or SQL — with full alert type mapping, gap analysis, and notification group migration.',
     idera:     'Convert IDERA SQL Diagnostic Manager alert exports into Redgate Monitor–ready PowerShell modules, webhook JSON, or SQL — with full SQLdm alert type mapping applied automatically.',
-    dpa:       'Convert SolarWinds DPA (Database Performance Analyzer) alert exports into Redgate Monitor–ready PowerShell modules, webhook JSON, or SQL — with wait time proxy mapping, DPA-specific gap analysis, and severity conversion.'
+    dpa:       'Convert SolarWinds DPA (Database Performance Analyzer) alert exports into Redgate Monitor–ready PowerShell modules, webhook JSON, or SQL — with wait time proxy mapping, DPA-specific gap analysis, and severity conversion.',
+    quest:     'Convert Quest Spotlight on SQL Server alarm history exports into Redgate Monitor–ready PowerShell modules, webhook JSON, or SQL — with full Spotlight alarm-type mapping, gap analysis for unavailable alarms, and threshold conversion guidance.'
   };
-  const cardTitles = { sqlsentry: 'Import SQL Sentry alert export', idera: 'Import IDERA alert export', dpa: 'Import DPA alert export' };
+  const cardTitles = { sqlsentry: 'Import SQL Sentry alert export', idera: 'Import IDERA alert export', dpa: 'Import DPA alert export', quest: 'Import Quest Spotlight alarm export' };
   const dropLabels = {
     sqlsentry: 'Drop SQL Sentry .condition files, a ZIP, or a CSV here, or click to browse',
     idera:     'Drop an IDERA CSV or ZIP here, or click to browse',
-    dpa:       'Drop a DPA CSV or ZIP here, or click to browse'
+    dpa:       'Drop a DPA CSV or ZIP here, or click to browse',
+    quest:     'Drop a Quest Spotlight alarm history CSV or ZIP here, or click to browse'
   };
   const mapSubs = {
     sqlsentry: 'SQL Sentry column → Redgate Monitor field. Auto-matched where column names align — override any below.',
     idera:     'IDERA column → Redgate Monitor field. Auto-matched where column names align — override any below.',
-    dpa:       'DPA column → Redgate Monitor field. Auto-matched where column names align — override any below.'
+    dpa:       'DPA column → Redgate Monitor field. Auto-matched where column names align — override any below.',
+    quest:     'Quest Spotlight column → Redgate Monitor field. Auto-matched where column names align — override any below.'
   };
   document.getElementById('heroTitle').textContent       = titles[mode]     || titles.sqlsentry;
   document.getElementById('heroDesc').textContent        = descs[mode]      || descs.sqlsentry;
@@ -1364,22 +1751,26 @@ function setSource(mode) {
   document.getElementById('howToDPA').classList.toggle('hidden',   mode !== 'dpa');
   document.getElementById('howToIDERA').classList.toggle('hidden', mode !== 'idera');
   document.getElementById('howToSS').classList.toggle('hidden',    mode !== 'sqlsentry');
+  document.getElementById('howToQuest').classList.toggle('hidden', mode !== 'quest');
 
   // Update notification card to match source terminology
   const notifTitles = {
     sqlsentry: 'Notification group mapping',
     idera:     'Alert Action mapping',
-    dpa:       'Notification profile mapping'
+    dpa:       'Notification profile mapping',
+    quest:     'Notification channel mapping'
   };
   const notifDescs = {
     sqlsentry: 'Map each SQL Sentry notification / email group to a Redgate Monitor notification action. These are included in the generated PowerShell module as configuration guidance.',
     idera:     'Map each IDERA Alert Action (email subscription, SNMP trap, script) to a Redgate Monitor notification action. In IDERA these are called Alert Actions + Subscriptions; in Redgate Monitor they are Notification profiles assigned per alert type.',
-    dpa:       'Map each DPA notification target (email recipient, SNMP trap, script) to a Redgate Monitor notification action. In DPA these are configured per-alert under Alert Settings → Notifications; in Redgate Monitor they are Notification profiles assigned per alert type.'
+    dpa:       'Map each DPA notification target (email recipient, SNMP trap, script) to a Redgate Monitor notification action. In DPA these are configured per-alert under Alert Settings → Notifications; in Redgate Monitor they are Notification profiles assigned per alert type.',
+    quest:     'Map each Quest Spotlight notification channel (email group, SNMP trap, script action) to a Redgate Monitor notification action. In Spotlight these are called Alarm Actions; in Redgate Monitor they are Notification profiles assigned per alert type.'
   };
   const notifHints = {
     sqlsentry: '',
     idera: '<div class="info-box" style="margin-top:10px;font-size:11px"><strong>Threshold conversion reminder:</strong> IDERA "Days Since Last Backup" → multiply × 24 for RG Monitor hours. "Oldest Open Transaction" minutes → multiply × 60 for RG Monitor seconds. "OS Memory Usage %" → convert to available MB (total_ram × (1 − pct/100)).</div>',
-    dpa:   '<div class="info-box" style="margin-top:10px;font-size:11px"><strong>DPA threshold conversion reminders:</strong> DPA Severity "Fatal/Critical" → Redgate Monitor "High". "Warning" → "Medium". "Informational" → "Low". Wait time thresholds are in ms — DPA cumulative wait vs RG rate-of-change (ms/min). Memory Available: DPA uses %, Redgate Monitor uses MB available (total_RAM_MB × (1 − pct/100)). Disk Space: DPA "free %" → Redgate Monitor "used %" (100 − free_pct). Blocking: DPA threshold in ms ÷ 1000 = RG seconds.</div>'
+    dpa:   '<div class="info-box" style="margin-top:10px;font-size:11px"><strong>DPA threshold conversion reminders:</strong> DPA Severity "Fatal/Critical" → Redgate Monitor "High". "Warning" → "Medium". "Informational" → "Low". Wait time thresholds are in ms — DPA cumulative wait vs RG rate-of-change (ms/min). Memory Available: DPA uses %, Redgate Monitor uses MB available (total_RAM_MB × (1 − pct/100)). Disk Space: DPA "free %" → Redgate Monitor "used %" (100 − free_pct). Blocking: DPA threshold in ms ÷ 1000 = RG seconds.</div>',
+    quest: '<div class="info-box" style="margin-top:10px;font-size:11px"><strong>Quest Spotlight threshold conversion reminders:</strong> Severity "Critical/High" → Redgate Monitor "High". "Medium" → "Medium". "Low/Informational" → "Low". Backup alarms: Spotlight days × 24 = Redgate Monitor hours. Memory: Spotlight "% free" → Redgate Monitor MB available (total_RAM_MB × (1 − pct/100)). Disk: Spotlight "% used" maps directly. Log backup threshold: Spotlight minutes ÷ 60 = Redgate Monitor hours. Blocking: Spotlight seconds = Redgate Monitor seconds (same unit).</div>'
   };
   document.getElementById('notifGroupTitle').textContent = notifTitles[mode] || notifTitles.sqlsentry;
   document.getElementById('notifGroupDesc').textContent  = notifDescs[mode]  || notifDescs.sqlsentry;
@@ -1387,7 +1778,10 @@ function setSource(mode) {
 }
 
 function resolveRgType(alertType, alertName, message) {
-  const map = sourceMode === 'sqlsentry' ? SS_TYPE_MAP : sourceMode === 'idera' ? IDERA_TYPE_MAP : DPA_TYPE_MAP;
+  const map = sourceMode === 'sqlsentry' ? SS_TYPE_MAP
+            : sourceMode === 'idera'     ? IDERA_TYPE_MAP
+            : sourceMode === 'quest'     ? QUEST_TYPE_MAP
+            :                             DPA_TYPE_MAP;
   const hay = [alertType, alertName, message].join(' ').toLowerCase();
   for (const r of map) {
     if (r.keys.some(k => hay.includes(k))) return r;
@@ -1574,7 +1968,10 @@ function finalizeConditionImport(allAlerts, summary) {
   const ssCount        = summary.filter(s => s.fmt.startsWith('ss')).length;
   const ideraCount     = summary.filter(s => s.fmt === 'idera').length;
   const dpaCount       = summary.filter(s => s.fmt === 'dpa' || s.fmt === 'dpa-json').length;
-  if (dpaCount >= Math.ceil(summary.length / 2)) {
+  const questCount     = summary.filter(s => s.fmt === 'quest').length;
+  if (questCount >= Math.ceil(summary.length / 2)) {
+    sourceMode = 'quest';
+  } else if (dpaCount >= Math.ceil(summary.length / 2)) {
     sourceMode = 'dpa';
   } else if (ssCount >= Math.ceil(summary.length / 2)) {
     sourceMode = 'sqlsentry';
@@ -1584,11 +1981,12 @@ function finalizeConditionImport(allAlerts, summary) {
   document.getElementById('srcSS').classList.toggle('active',    sourceMode === 'sqlsentry');
   document.getElementById('srcIDERA').classList.toggle('active', sourceMode === 'idera');
   document.getElementById('srcDPA').classList.toggle('active',   sourceMode === 'dpa');
+  document.getElementById('srcQuest').classList.toggle('active', sourceMode === 'quest');
 
   alerts = allAlerts;
   colHeaders = ['alertName','severity','instance','startTime','endTime','alertType','message','threshold','currentValue','status'];
 
-  const FMT_LABEL = { dpa:'SolarWinds DPA (CSV)', 'dpa-json':'SolarWinds DPA (JSON definitions)', 'ss-csv':'SQL Sentry (alert log)', 'ss-condition':'SQL Sentry (.condition)', idera:'IDERA' };
+  const FMT_LABEL = { dpa:'SolarWinds DPA (CSV)', 'dpa-json':'SolarWinds DPA (JSON definitions)', 'ss-csv':'SQL Sentry (alert log)', 'ss-condition':'SQL Sentry (.condition)', idera:'IDERA', quest:'Quest Spotlight (alarm history)' };
   const fileRows = summary.map(s =>
     `<div style="display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:7px 0;border-bottom:0.5px solid var(--border)">
       <span style="font-size:12px;font-family:monospace;word-break:break-all">${esc(s.name)}</span>
@@ -1622,6 +2020,10 @@ function finalizeConditionImport(allAlerts, summary) {
 // Detect format of a CSV/TXT file (not .condition — those are handled by extension)
 function detectFormat(text) {
   const h = text.trim().split('\n')[0].toLowerCase();
+  // Quest Spotlight: "Connection" or "Alarm" column headers are characteristic; also "Raised"
+  if (h.includes('connection') && h.includes('alarm') && h.includes('raised')) return 'quest';
+  if (h.includes('connection') && h.includes('alarm') && (h.includes('severity') || h.includes('resolved'))) return 'quest';
+  if (h.includes('spotlight') || (h.includes('alarm') && h.includes('raised') && h.includes('threshold'))) return 'quest';
   if (h.includes('databaseinstance') || h.includes('database instance') || (h.includes('alertname') && h.includes('alerttype') && !h.includes('target'))) return 'dpa';
   if (h.includes('target') || h.includes('condition type') || h.includes('ack')) return 'ss-csv';
   if (h.includes('sqldm') || h.includes('sqld') || (h.includes('category') && h.includes('sqlserver')) || (h.includes('alert') && h.includes('current value') && h.includes('category'))) return 'idera';
@@ -1633,7 +2035,18 @@ function normalizeCSVText(text, fmt, idOffset) {
   const lines = text.split('\n').filter(l => l.trim());
   if (lines.length < 2) return [];
   const headers = splitCSV(lines[0]);
-  const am = fmt === 'idera' ? {
+  const am = fmt === 'quest' ? {
+    alertName:    find(headers, ['alarm','alertname','alert','alarmname','alarm name','alert name']),
+    severity:     find(headers, ['severity','level','priority']),
+    instance:     find(headers, ['connection','server','monitored server','instance','host','sqlserver']),
+    startTime:    find(headers, ['raised','start time','starttime','datetime','timestamp','time','occurred','raised at','alarm raised']),
+    endTime:      find(headers, ['resolved','end time','endtime','cleared','resolved at']),
+    alertType:    find(headers, ['category','type','alarm category','alarmcategory','alarm type','alarmtype']),
+    message:      find(headers, ['details','message','description','notes','detail','msg','info']),
+    threshold:    find(headers, ['threshold','configured threshold','limit']),
+    currentValue: find(headers, ['value','current value','currentvalue','actual value','alarm value']),
+    status:       find(headers, ['status','state','alarm status'])
+  } : fmt === 'idera' ? {
     alertName:    find(headers, ['alert','metric','alerttype','alert type','alert_type','metricname','metric name']),
     severity:     find(headers, ['severity','level','priority']),
     instance:     find(headers, ['sqlserver','sql server','server','servername','server name','instance','host']),
@@ -1780,6 +2193,7 @@ function inferConditionAlertType(areas, tags, name) {
 function loadSample() {
   if (sourceMode === 'idera') { loadSampleIDERA(); return; }
   if (sourceMode === 'dpa')   { loadSampleDPA();   return; }
+  if (sourceMode === 'quest') { loadSampleQuest(); return; }
   loadSampleSS();
 }
 
@@ -1812,6 +2226,22 @@ function loadSampleSS() {
 ,PROD-SQL-01,SQL Server,Deadlock Detected,General,High,2026-04-01 12:05:00,2026-04-01 12:05:01,< 1 min,Deadlock between sessions 44 and 67
 ,PROD-SQL-02,SQL Server,Backup Overdue,General,High,2026-04-01 13:00:00,,Active,Last backup 36 hrs ago (threshold: 24 hrs)
 ,PROD-SQL-01,SQL Server,High Wait Time,Advisory,Medium,2026-04-01 14:00:00,2026-04-01 14:20:00,20 min,Elevated CXPACKET and PAGEIOLATCH wait types detected`;
+  parseCSV();
+}
+
+function loadSampleQuest() {
+  document.getElementById('rawPaste').value =
+`Connection,Alarm,Category,Severity,Raised,Resolved,Status,Value,Threshold,Details
+PROD-SQL-01,Locks - Blocked Processes,SQL Server,High,2026-04-01 08:12:00,2026-04-01 08:28:00,Resolved,4,1,4 blocked sessions detected; head blocker session 57 holding IX lock for 95 seconds
+PROD-SQL-01,Locks - Deadlocks,SQL Server,High,2026-04-01 09:03:00,,Active,1,0,Deadlock between sessions 44 and 67 on table [dbo].[OrderLines]
+PROD-SQL-02,Backup - Days Since Last Full Backup,SQL Server,High,2026-04-01 13:00:00,,Active,3,2,Database [Payroll] last full backup 3 days ago (threshold: 2 days)
+PROD-SQL-01,SQL - Long Running SQL,SQL Server,Medium,2026-04-01 07:55:00,2026-04-01 08:10:00,Resolved,187432,60000,Query elapsed time 187 seconds (threshold: 60 seconds) — spid 89 running ETL_Loader
+PROD-SQL-02,CPU - Average CPU Usage,Windows,High,2026-04-01 10:15:00,,Active,94,80,Windows CPU usage at 94% (threshold: 80%) — sustained for 8 minutes
+PROD-SQL-01,Memory - Physical Memory Available,Windows,Medium,2026-04-01 11:30:00,2026-04-01 11:48:00,Resolved,210,512,Physical memory available: 210 MB (threshold: 512 MB)
+PROD-SQL-01,Disks - Percentage Used,Windows,High,2026-04-01 10:00:00,,Active,91,85,Drive C: at 91% used (threshold: 85%)
+PROD-SQL-02,Availability Group - Failed Over,Availability Groups,High,2026-04-01 07:00:00,2026-04-01 07:02:00,Resolved,1,0,AG [ProdAG] failed over — new primary is PROD-SQL-02
+PROD-SQL-01,SQL Agent - Jobs Failed,SQL Server,High,2026-04-01 06:00:00,2026-04-01 06:01:00,Resolved,1,0,SQL Agent job 'NightlyBackup' failed at step 2 — error 3201
+PROD-SQL-01,Tempdb Contention,SQL Server,Medium,2026-03-31 22:10:00,2026-03-31 22:25:00,Resolved,48,20,Tempdb latch contention at 48ms (threshold: 20ms) — PFS page hotspot detected`;
   parseCSV();
 }
 
@@ -1870,8 +2300,18 @@ function splitCSV(line) {
 
 // ── Field mapping UI ───────────────────────────────────────────────────────
 function buildMappingUI() {
-  // DPA hint lists are unchanged; SQL Sentry adds 'target' for instance and 'notes'/'name' variants
-  const autoMap = sourceMode === 'sqlsentry' ? {
+  const autoMap = sourceMode === 'quest' ? {
+    alertName:    find(colHeaders, ['alarm','alertname','alert','alarmname']),
+    severity:     find(colHeaders, ['severity','level','priority']),
+    instance:     find(colHeaders, ['connection','server','instance','host']),
+    startTime:    find(colHeaders, ['raised','starttime','datetime','timestamp','time','occurred']),
+    endTime:      find(colHeaders, ['resolved','endtime','cleared']),
+    alertType:    find(colHeaders, ['category','type','alarmcategory','alarmtype']),
+    message:      find(colHeaders, ['details','message','description','notes','detail','msg']),
+    threshold:    find(colHeaders, ['threshold','limit']),
+    currentValue: find(colHeaders, ['value','currentvalue','actual']),
+    status:       find(colHeaders, ['status','state'])
+  } : sourceMode === 'sqlsentry' ? {
     alertName:    find(colHeaders, ['name','alertname','alert_name','title']),
     severity:     find(colHeaders, ['severity','level','priority']),
     instance:     find(colHeaders, ['target','databaseinstance','instance','server','host']),

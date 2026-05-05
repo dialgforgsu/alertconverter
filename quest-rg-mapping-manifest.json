@@ -1,0 +1,304 @@
+{
+  "manifest": {
+    "version": "1.0",
+    "source": "Quest Spotlight on SQL Server (Spotlight Enterprise / Spotlight Cloud)",
+    "target": "Redgate Monitor",
+    "generatedDate": "2026-05-05",
+    "description": "Mapping of Quest Spotlight on SQL Server alarm types to their nearest Redgate Monitor alert equivalents. Covers SQL Server alarms (87), Windows Server alarms (22), and Availability Group alarms (11). Each entry includes migration feasibility (direct/partial/custom/none/retire) and threshold conversion guidance.",
+    "alarmCategories": ["SQL Server", "Windows", "Availability Groups"],
+    "totalAlarms": 120,
+    "sources": [
+      "https://help.spotlightessentials.com/sqlserver_alarms",
+      "https://help.spotlightessentials.com/tag_windows_alarms",
+      "https://help.spotlightessentials.com/tag_availability_group_alarms"
+    ]
+  },
+
+  "severityMapping": {
+    "strategy": "Spotlight uses Low/Medium/High/Critical; Redgate Monitor uses Low/Medium/High. Critical and High both map to High in Redgate Monitor.",
+    "spotlightToRg": {
+      "Critical": { "spotlightLabel": "Critical", "rgSeverity": "High",   "rgColor": "Red",    "notes": "Highest severity — immediate action required" },
+      "High":     { "spotlightLabel": "High",     "rgSeverity": "High",   "rgColor": "Red",    "notes": "Maps to High in Redgate Monitor" },
+      "Medium":   { "spotlightLabel": "Medium",   "rgSeverity": "Medium", "rgColor": "Amber",  "notes": "Direct map" },
+      "Low":      { "spotlightLabel": "Low",       "rgSeverity": "Low",    "rgColor": "Blue",   "notes": "Informational threshold — review before migration" },
+      "Informational": { "spotlightLabel": "Informational", "rgSeverity": "Low", "rgColor": "Blue", "notes": "Map to Low; consider retiring very noisy informational alarms" }
+    }
+  },
+
+  "thresholdConversions": {
+    "backup": {
+      "daysToHours": "Spotlight 'Days Since Last Full Backup' × 24 = Redgate Monitor hours threshold",
+      "minutesToHours": "Spotlight 'Minutes Since Last Log Backup' ÷ 60 = Redgate Monitor hours threshold",
+      "hoursToHours": "Spotlight 'Hours Since Last Differential Backup' = Redgate Monitor hours threshold (1:1)"
+    },
+    "memory": {
+      "percentFreeToMbAvailable": "Spotlight % Free Physical Memory: threshold_MB = total_RAM_MB × (spotlight_threshold_pct ÷ 100). Example: 20% free on 64 GB server → alert when available < 13107 MB",
+      "physicalMbDirect": "Spotlight 'Physical Memory Available (MB)' maps directly to Redgate Monitor OS memory available in MB"
+    },
+    "disk": {
+      "percentUsedDirect": "Spotlight 'Percentage Used' maps directly to Redgate Monitor Disk Used %",
+      "percentFreeConvert": "Spotlight % free → Redgate Monitor % used: 100 − spotlight_free_pct"
+    },
+    "blocking": {
+      "secondsDirect": "Spotlight blocking threshold is in seconds — same unit as Redgate Monitor. Direct threshold transfer."
+    },
+    "logBackupMinutes": {
+      "note": "Spotlight 'Minutes Since Last Log Backup' ÷ 60 = Redgate Monitor hours. Recommended: 0.25 hours (15 min) for high-transaction systems, 1–4 hours for lower RPO requirements."
+    }
+  },
+
+  "migrationStrategy": {
+    "phases": [
+      {
+        "phase": 1,
+        "name": "Direct Replacements",
+        "matchType": "direct",
+        "description": "Spotlight alarms that map 1:1 to a built-in Redgate Monitor alert type with the same semantic meaning.",
+        "conditions": [
+          "Locks - Blocked Processes → Blocking processes",
+          "Locks - Deadlocks → Deadlock (Extended Events)",
+          "Backup - Days Since Last Full Backup → Backup overdue",
+          "SQL - Long Running SQL → Long running query",
+          "SQL Agent - Jobs Failed → Job failing",
+          "Databases - Unavailable → SQL Server unavailable",
+          "CPU - Average CPU Usage → Processor (CPU) utilization",
+          "Memory - Physical Memory Available → OS memory available",
+          "Disks - Percentage Used / Free Space → Disk space",
+          "Disks - Transfer Time → Disk space / avg read-write time",
+          "I/O Stall Time → Disk space / avg read-write time",
+          "Network - Percentage Bandwidth → Network utilization",
+          "Availability Group - Failed Over → AG / Cluster failover",
+          "Clusters - Failed Over → AG / Cluster failover",
+          "Mirroring - Failedover → AG / Cluster failover",
+          "Tempdb File Size → Disk space",
+          "Databases - Data File Group Space Used → Disk space",
+          "Databases - Log File Space Used → Disk space"
+        ]
+      },
+      {
+        "phase": 2,
+        "name": "Partial / Configured Replacements",
+        "matchType": "partial",
+        "description": "Spotlight alarms where a built-in Redgate Monitor alert covers the concept but has different behavior, different threshold units, or different granularity. Manual threshold adjustment or supplemental configuration required.",
+        "conditions": [
+          "Backup - Hours Since Last Differential Backup → Backup overdue (type-filter needed)",
+          "Backup - Minutes Since Last Log Backup → Backup overdue (unit conversion: ÷60)",
+          "Clusters - Node Unavailable → AG / Cluster failover (node detail limited)",
+          "Clusters - Non-Preferred Node → AG / Cluster failover + custom DMV query",
+          "Memory - Percentage Free Virtual Memory → OS memory available (unit conversion)",
+          "Databases - Data File Group About to Grow → Disk space (reactive, not predictive)",
+          "Databases - SQL I/O Errors → SQL Server log entry (pattern match 823/824/825)",
+          "Error Log alarms → SQL Server log entry (keyword pattern matching only)",
+          "Mirroring - State → AG / Cluster failover (failover events only)",
+          "Log Shipping - Primary/Secondary Job → Job failing (job name filter needed)",
+          "SQL Agent - Status → SQL Server unavailable (proxy via Agent job monitoring)",
+          "SQL Agent - Long Running Jobs → Long running query (queries only, not Agent jobs)",
+          "Availability Group - Failover Availability → AG / Cluster failover (health not monitored)",
+          "Tempdb Auto Growth → Disk space + SQL Server log entry",
+          "Services - Service Not Running → SQL Server log entry (event-based only)",
+          "CPU - Individual CPU Usage → Processor (CPU) utilization (per-core not supported)"
+        ]
+      },
+      {
+        "phase": 3,
+        "name": "Custom Metrics Required",
+        "matchType": "custom",
+        "description": "Spotlight alarms that require a custom T-SQL metric in Redgate Monitor. T-SQL queries are provided in each condition entry's note field.",
+        "conditions": [
+          "Compiles - Percentage Recompilations → dm_os_performance_counters SQL Re-Compilations/sec",
+          "Databases - Dynamic Data/Log File Growths Remaining → sys.master_files growths remaining",
+          "Databases - Log Flush Wait Time → sys.dm_os_performance_counters Log Flush Wait Time",
+          "I/O - Index Fragmentation → sys.dm_db_index_physical_stats",
+          "Latch - Total Wait Time Rate → sys.dm_os_latch_stats",
+          "Log Shipping - Secondary Latency → msdb.dbo.log_shipping_monitor_secondary",
+          "Memory - Free System Page Table Entries → dm_os_performance_counters Free System PTEs",
+          "Memory - Page Life Expectancy → dm_os_performance_counters Page life expectancy",
+          "Mirroring - Unrestored/Unsent Log → sys.database_mirroring queue sizes",
+          "Network - SQL Server Packets Error Rate → dm_os_performance_counters Packet Errors/sec",
+          "Paging - Disk Activity → sys.dm_os_process_memory page_fault_count",
+          "Services - DTC/Full Text/Integration/SSRS/Agent Mail → msdb + error log patterns",
+          "SQL - Running out of Threads → sys.dm_os_sys_info max_workers_count",
+          "SQL Agent - Alerts → SQL Server log entry + Extended Events",
+          "SQL Agent - Long Running Jobs (Time/Percent) → msdb.dbo.sysjobactivity elapsed time",
+          "SQL Custom Counters → individual custom metrics per counter",
+          "SQL Virtual Log Files Count → sys.dm_db_log_info VLF count",
+          "Tempdb Contention → sys.dm_os_wait_stats PFS/GAM latch waits",
+          "Tempdb Version Store Size/Rate → sys.dm_db_file_space_usage version_store",
+          "User - Connection Count → sys.dm_exec_sessions user connections",
+          "User - Logins Per Second → dm_os_performance_counters Logins/sec",
+          "User - Response Time → sys.dm_exec_query_stats avg elapsed time",
+          "CPU - Processor Queue Length → sys.dm_os_schedulers runnable_tasks_count",
+          "Disk Queue Length → sys.dm_io_virtual_file_stats avg stall ms",
+          "Availability Group - Quorum Failure Imminent → sys.dm_hadr_cluster_members",
+          "Availability Group - Synchronization Health → sys.dm_hadr_database_replica_states"
+        ]
+      },
+      {
+        "phase": 4,
+        "name": "Not Available — Cannot be Replicated",
+        "matchType": "none",
+        "description": "Spotlight alarms that have no T-SQL equivalent or depend on proprietary Spotlight features / external products. Document as known gaps and address with alternative tooling.",
+        "conditions": [
+          "Performance Investigator — Spotlight-proprietary composite score; no T-SQL equivalent",
+          "Poor Performance Health — Spotlight composite health score; use individual RG Monitor alerts",
+          "LiteSpeed Backup Failed/Warning — requires Quest LiteSpeed product",
+          "Clusters - File Share Witness Inaccessible — Windows cluster quorum resource (no T-SQL)",
+          "Tempdb File Location — configuration audit; enforce via build standards/DSC",
+          "Tempdb Growth Settings — configuration audit; enforce via build standards/DSC",
+          "Tempdb Number of Files — configuration audit; enforce via build standards/DSC",
+          "File - Exceeded Set Size — WMI file size monitoring; no T-SQL equivalent",
+          "Windows - Up Time — OS uptime; no T-SQL equivalent",
+          "Services - Power BI Reporting Service — PBIRS service not T-SQL accessible",
+          "Paging - File Collision — Windows paging configuration; enforce via OS policy",
+          "Monitored Server (SQL/Windows/AG) internal alarms — Spotlight internal health only"
+        ],
+        "alternatives": [
+          "LiteSpeed alarms: switch to native SQL Server backup monitoring via Backup overdue alert",
+          "File Share Witness: monitor via Windows cluster event logs (Event ID 1135/1177)",
+          "Tempdb config alarms: enforce correct configuration via PowerShell DSC or Group Policy Objects",
+          "Windows Up Time: monitor via Windows Event Log ID 6005/6006/6008 (startup/shutdown)",
+          "PBIRS service: monitor via Get-Service PowerShell remoting or SCOM/Nagios agent",
+          "Performance Investigator: use Redgate Monitor Dynamic Alerts (ML) in v14+ for composite anomaly detection"
+        ]
+      },
+      {
+        "phase": 5,
+        "name": "Retire — Do Not Recreate",
+        "matchType": "retire",
+        "description": "Spotlight alarms that are Spotlight-internal health monitors. Redgate Monitor handles its own agent health internally — these should not be recreated.",
+        "conditions": [
+          "Monitored Server - SQL Server Alarm Action/Evaluation/Collection/Connection/Host/Planned Outage/Secondary/Unsupported Version",
+          "Monitored Server - Windows Alarm Action/Evaluation/Collection/Connection/Planned Outage/Secondary/Unsupported Version",
+          "Monitored Server - Availability Group Alarm Action/Evaluation/Collection/Connection/Planned Outage/Secondary/Unsupported Version",
+          "Missing SQL Performance Counters — fix the underlying WMI/perfmon issue rather than alerting"
+        ]
+      }
+    ]
+  },
+
+  "alarms": [
+    { "id": "QS-001", "category": "Backup",           "spotlightAlarm": "Backup - Days Since Last Full Backup",               "rgAlertType": "Backup overdue",                   "matchType": "direct",  "thresholdNote": "Spotlight days × 24 = RG Monitor hours", "availableInRG": true },
+    { "id": "QS-002", "category": "Backup",           "spotlightAlarm": "Backup - Hours Since Last Differential Backup",      "rgAlertType": "Backup overdue",                   "matchType": "partial", "thresholdNote": "Same unit (hours). Filter backup type = DIFFERENTIAL", "availableInRG": true },
+    { "id": "QS-003", "category": "Backup",           "spotlightAlarm": "Backup - Minutes Since Last Log Backup",             "rgAlertType": "Backup overdue",                   "matchType": "partial", "thresholdNote": "Spotlight minutes ÷ 60 = RG Monitor hours", "availableInRG": true },
+    { "id": "QS-004", "category": "Cluster",          "spotlightAlarm": "Clusters - Failed Over",                             "rgAlertType": "AG / Cluster failover",            "matchType": "direct",  "thresholdNote": "Event-based — no threshold to transfer", "availableInRG": true },
+    { "id": "QS-005", "category": "Cluster",          "spotlightAlarm": "Clusters - File Share Witness Inaccessible",         "rgAlertType": "NOT AVAILABLE IN REDGATE MONITOR", "matchType": "none",    "thresholdNote": "N/A — Windows cluster quorum resource", "availableInRG": false },
+    { "id": "QS-006", "category": "Cluster",          "spotlightAlarm": "Clusters - Node Unavailable",                       "rgAlertType": "AG / Cluster failover",            "matchType": "partial", "thresholdNote": "Node-level detail limited; use DMV sys.dm_os_cluster_nodes", "availableInRG": true },
+    { "id": "QS-007", "category": "Cluster",          "spotlightAlarm": "Clusters - Non-Preferred Node",                     "rgAlertType": "AG / Cluster failover",            "matchType": "partial", "thresholdNote": "Compare current owner vs preferred node name via sys.dm_os_cluster_nodes", "availableInRG": true },
+    { "id": "QS-008", "category": "Compilation",      "spotlightAlarm": "Compiles - Percentage Recompilations",               "rgAlertType": "Custom metric",                    "matchType": "custom",  "thresholdNote": "dm_os_performance_counters SQL Re-Compilations/sec", "availableInRG": true },
+    { "id": "QS-009", "category": "Databases",        "spotlightAlarm": "Databases - Data File Group About to Grow",          "rgAlertType": "Disk space",                       "matchType": "partial", "thresholdNote": "Reactive space usage; supplement with growths-remaining custom metric", "availableInRG": true },
+    { "id": "QS-010", "category": "Databases",        "spotlightAlarm": "Databases - Data File Group Space Used",             "rgAlertType": "Disk space",                       "matchType": "direct",  "thresholdNote": "Spotlight % used → RG Monitor Disk Used %", "availableInRG": true },
+    { "id": "QS-011", "category": "Databases",        "spotlightAlarm": "Databases - Dynamic Data File Group Growths Remaining", "rgAlertType": "Custom metric",               "matchType": "custom",  "thresholdNote": "sys.master_files: (max_size - size) / NULLIF(growth, 0) AS growths_remaining", "availableInRG": true },
+    { "id": "QS-012", "category": "Databases",        "spotlightAlarm": "Databases - Dynamic Log File Growths Remaining",     "rgAlertType": "Custom metric",                    "matchType": "custom",  "thresholdNote": "sys.master_files type_desc = LOG: growths remaining calculation", "availableInRG": true },
+    { "id": "QS-013", "category": "Databases",        "spotlightAlarm": "Databases - Log File Space Used",                    "rgAlertType": "Disk space",                       "matchType": "direct",  "thresholdNote": "Log file % used → RG Monitor Disk Used %", "availableInRG": true },
+    { "id": "QS-014", "category": "Databases",        "spotlightAlarm": "Databases - Log Flush Wait Time",                    "rgAlertType": "Custom metric",                    "matchType": "custom",  "thresholdNote": "dm_os_performance_counters Log Flush Wait Time (ms)", "availableInRG": true },
+    { "id": "QS-015", "category": "Databases",        "spotlightAlarm": "Databases - SQL I/O Errors",                         "rgAlertType": "SQL Server log entry",             "matchType": "partial", "thresholdNote": "Keyword filter: 823, 824, 825 (I/O error codes in SQL error log)", "availableInRG": true },
+    { "id": "QS-016", "category": "Databases",        "spotlightAlarm": "Databases - Unavailable",                            "rgAlertType": "SQL Server unavailable",           "matchType": "direct",  "thresholdNote": "Event-based — no threshold. Also: SELECT name, state_desc FROM sys.databases WHERE state_desc <> 'ONLINE'", "availableInRG": true },
+    { "id": "QS-017", "category": "Error Log",        "spotlightAlarm": "Error Log - Critical Error",                         "rgAlertType": "SQL Server log entry",             "matchType": "partial", "thresholdNote": "Keyword pattern matching; configure for severity 16+ keywords", "availableInRG": true },
+    { "id": "QS-018", "category": "Error Log",        "spotlightAlarm": "Error Log - Error Count",                            "rgAlertType": "SQL Server log entry",             "matchType": "partial", "thresholdNote": "Redgate Monitor does not count errors; use pattern matching for specific error text", "availableInRG": true },
+    { "id": "QS-019", "category": "Error Log",        "spotlightAlarm": "Error Log - Fatal * Errors (severity 20–25)",        "rgAlertType": "SQL Server log entry",             "matchType": "partial", "thresholdNote": "Keyword filter: severity level string or error number for fatal errors", "availableInRG": true },
+    { "id": "QS-020", "category": "Error Log",        "spotlightAlarm": "Error Log - High/Medium/Low/Info Severity",          "rgAlertType": "SQL Server log entry",             "matchType": "partial", "thresholdNote": "Lower severity alarms tend to generate noise; tune keyword patterns carefully", "availableInRG": true },
+    { "id": "QS-021", "category": "I/O",              "spotlightAlarm": "I/O Stall Time",                                     "rgAlertType": "Disk space / avg read-write time", "matchType": "direct",  "thresholdNote": "Same metric — I/O latency in ms. Benchmarks: <10ms=fast, 10-20ms=acceptable, >50ms=critical", "availableInRG": true },
+    { "id": "QS-022", "category": "I/O",              "spotlightAlarm": "Index Fragmentation",                                "rgAlertType": "Custom metric",                    "matchType": "custom",  "thresholdNote": "sys.dm_db_index_physical_stats avg_fragmentation_in_percent > 30", "availableInRG": true },
+    { "id": "QS-023", "category": "I/O",              "spotlightAlarm": "Index Fragmentation Status",                         "rgAlertType": "Custom metric",                    "matchType": "custom",  "thresholdNote": "sys.dm_db_index_physical_stats — count of indexes above threshold", "availableInRG": true },
+    { "id": "QS-024", "category": "Latch",            "spotlightAlarm": "Latch - Total Wait Time Rate",                       "rgAlertType": "Custom metric",                    "matchType": "custom",  "thresholdNote": "sys.dm_os_latch_stats SUM(wait_time_ms) rate-of-change", "availableInRG": true },
+    { "id": "QS-025", "category": "LiteSpeed Backup", "spotlightAlarm": "LiteSpeed Backup Failed",                            "rgAlertType": "NOT AVAILABLE IN REDGATE MONITOR", "matchType": "none",    "thresholdNote": "Requires Quest LiteSpeed for SQL Server", "availableInRG": false },
+    { "id": "QS-026", "category": "LiteSpeed Backup", "spotlightAlarm": "LiteSpeed Backup Warning",                           "rgAlertType": "NOT AVAILABLE IN REDGATE MONITOR", "matchType": "none",    "thresholdNote": "Requires Quest LiteSpeed for SQL Server", "availableInRG": false },
+    { "id": "QS-027", "category": "Locks",            "spotlightAlarm": "Locks - Blocked Processes",                          "rgAlertType": "Blocking processes",               "matchType": "direct",  "thresholdNote": "Spotlight seconds = Redgate Monitor seconds. Same unit — direct transfer.", "availableInRG": true },
+    { "id": "QS-028", "category": "Locks",            "spotlightAlarm": "Locks - Deadlocks",                                  "rgAlertType": "Deadlock (Extended Events)",       "matchType": "direct",  "thresholdNote": "Event-based — no threshold. Captures full deadlock graph.", "availableInRG": true },
+    { "id": "QS-029", "category": "Log Shipping",     "spotlightAlarm": "Log Shipping - Primary Backup Job",                  "rgAlertType": "Job failing",                      "matchType": "partial", "thresholdNote": "Filter by log shipping backup job name in msdb.dbo.sysjobhistory", "availableInRG": true },
+    { "id": "QS-030", "category": "Log Shipping",     "spotlightAlarm": "Log Shipping - Secondary Job",                       "rgAlertType": "Job failing",                      "matchType": "partial", "thresholdNote": "Filter by log shipping copy/restore job name", "availableInRG": true },
+    { "id": "QS-031", "category": "Log Shipping",     "spotlightAlarm": "Log Shipping - Secondary Latency",                   "rgAlertType": "Custom metric",                    "matchType": "custom",  "thresholdNote": "msdb.dbo.log_shipping_monitor_secondary last_restored_latency in minutes", "availableInRG": true },
+    { "id": "QS-032", "category": "Memory",           "spotlightAlarm": "Memory - Free System Page Table Entries",            "rgAlertType": "Custom metric",                    "matchType": "custom",  "thresholdNote": "dm_os_performance_counters Free System Page Table Entries; alert < 5000", "availableInRG": true },
+    { "id": "QS-033", "category": "Memory",           "spotlightAlarm": "Memory - Page Life Expectancy",                      "rgAlertType": "Custom metric",                    "matchType": "custom",  "thresholdNote": "dm_os_performance_counters Page life expectancy; threshold = (buffer_GB/4)*300", "availableInRG": true },
+    { "id": "QS-034", "category": "Memory",           "spotlightAlarm": "Memory - Percentage Free Virtual Memory",            "rgAlertType": "OS memory available",              "matchType": "partial", "thresholdNote": "Convert: available_mb = total_RAM_MB × (spotlight_pct ÷ 100)", "availableInRG": true },
+    { "id": "QS-035", "category": "Memory",           "spotlightAlarm": "Memory - Physical Memory Available",                 "rgAlertType": "OS memory available",              "matchType": "direct",  "thresholdNote": "Spotlight MB = Redgate Monitor MB. Direct threshold transfer.", "availableInRG": true },
+    { "id": "QS-036", "category": "Mirroring",        "spotlightAlarm": "Mirroring - Failedover",                             "rgAlertType": "AG / Cluster failover",            "matchType": "direct",  "thresholdNote": "Event-based — no threshold. Note: mirroring deprecated since SQL Server 2012.", "availableInRG": true },
+    { "id": "QS-037", "category": "Mirroring",        "spotlightAlarm": "Mirroring - State",                                  "rgAlertType": "AG / Cluster failover",            "matchType": "partial", "thresholdNote": "Failover events only; for state health use custom DMV query on sys.database_mirroring", "availableInRG": true },
+    { "id": "QS-038", "category": "Mirroring",        "spotlightAlarm": "Mirroring - Unrestored Log",                         "rgAlertType": "Custom metric",                    "matchType": "custom",  "thresholdNote": "sys.database_mirroring mirroring_redo_queue_size > 3072 KB", "availableInRG": true },
+    { "id": "QS-039", "category": "Mirroring",        "spotlightAlarm": "Mirroring - Unsent Log",                             "rgAlertType": "Custom metric",                    "matchType": "custom",  "thresholdNote": "sys.database_mirroring mirroring_send_queue_size > 3072 KB", "availableInRG": true },
+    { "id": "QS-040", "category": "Monitored Server", "spotlightAlarm": "Missing SQL Performance Counters",                   "rgAlertType": "RETIRE — environment configuration issue", "matchType": "retire", "thresholdNote": "Fix WMI/perfmon counters on host. Not an operational alert.", "availableInRG": false },
+    { "id": "QS-041", "category": "Monitored Server", "spotlightAlarm": "Monitored Server - SQL Server * (all sub-types)",    "rgAlertType": "RETIRE — Spotlight internal health alarm", "matchType": "retire", "thresholdNote": "Spotlight internal collection/connectivity health. RG Monitor handles internally.", "availableInRG": false },
+    { "id": "QS-042", "category": "Network",          "spotlightAlarm": "Network - Percentage Bandwidth",                     "rgAlertType": "Network utilization",              "matchType": "direct",  "thresholdNote": "Enable Network alert in RG Monitor v14+ (disabled by default). Convert % to rate if needed.", "availableInRG": true },
+    { "id": "QS-043", "category": "Network",          "spotlightAlarm": "Network - SQL Server Packets Error Rate",            "rgAlertType": "Custom metric",                    "matchType": "custom",  "thresholdNote": "dm_os_performance_counters Packet Errors/sec; alert when > 0", "availableInRG": true },
+    { "id": "QS-044", "category": "Paging",           "spotlightAlarm": "Paging - Disk Activity",                             "rgAlertType": "Custom metric",                    "matchType": "custom",  "thresholdNote": "sys.dm_os_process_memory page_fault_count rate-of-change", "availableInRG": true },
+    { "id": "QS-045", "category": "Paging",           "spotlightAlarm": "Paging - File Collision",                            "rgAlertType": "NOT AVAILABLE IN REDGATE MONITOR", "matchType": "none",    "thresholdNote": "Windows paging configuration issue. Enforce via OS policy.", "availableInRG": false },
+    { "id": "QS-046", "category": "Performance",      "spotlightAlarm": "Performance Investigator",                           "rgAlertType": "NOT AVAILABLE IN REDGATE MONITOR", "matchType": "none",    "thresholdNote": "Spotlight-proprietary composite score. Use RG Monitor Dynamic Alerts (ML) in v14+.", "availableInRG": false },
+    { "id": "QS-047", "category": "Performance",      "spotlightAlarm": "Poor Performance Health",                            "rgAlertType": "NOT AVAILABLE IN REDGATE MONITOR", "matchType": "none",    "thresholdNote": "Spotlight composite health score. No single T-SQL equivalent.", "availableInRG": false },
+    { "id": "QS-048", "category": "Services",         "spotlightAlarm": "Services - DTC Service Status",                      "rgAlertType": "Custom metric",                    "matchType": "custom",  "thresholdNote": "sys.dm_tran_distributed_transaction_details; SQL error log for DTC errors 8522/8525", "availableInRG": true },
+    { "id": "QS-049", "category": "Services",         "spotlightAlarm": "Services - Full Text Search",                        "rgAlertType": "Custom metric",                    "matchType": "custom",  "thresholdNote": "sys.fulltext_catalogs + SQL Server log entry for crawl errors", "availableInRG": true },
+    { "id": "QS-050", "category": "Services",         "spotlightAlarm": "Services - Integration Service Status",              "rgAlertType": "Custom metric",                    "matchType": "custom",  "thresholdNote": "msdb.dbo.sysssis_executionlog for SSIS package failures", "availableInRG": true },
+    { "id": "QS-051", "category": "Services",         "spotlightAlarm": "Services - Power BI Reporting Service",              "rgAlertType": "NOT AVAILABLE IN REDGATE MONITOR", "matchType": "none",    "thresholdNote": "PBIRS service not T-SQL accessible. Use Get-Service or OS monitoring.", "availableInRG": false },
+    { "id": "QS-052", "category": "Services",         "spotlightAlarm": "Services - SQL Server Reporting Service Status",     "rgAlertType": "Custom metric",                    "matchType": "custom",  "thresholdNote": "ReportServer DB dbo.ExecutionLog3 for SSRS errors; log entry for service events", "availableInRG": true },
+    { "id": "QS-053", "category": "Services",         "spotlightAlarm": "Services - SQL Agent Mail Status",                   "rgAlertType": "Custom metric",                    "matchType": "custom",  "thresholdNote": "msdb.dbo.sysmail_event_log error_type count in last hour", "availableInRG": true },
+    { "id": "QS-054", "category": "SQL Execution",    "spotlightAlarm": "SQL - Long Running SQL",                             "rgAlertType": "Long running query",               "matchType": "direct",  "thresholdNote": "Spotlight threshold in ms = Redgate Monitor threshold in ms. Direct transfer.", "availableInRG": true },
+    { "id": "QS-055", "category": "SQL Execution",    "spotlightAlarm": "SQL - Running out of Threads",                       "rgAlertType": "Custom metric",                    "matchType": "custom",  "thresholdNote": "sys.dm_os_sys_info max_workers_count; alert when current workers > 90%", "availableInRG": true },
+    { "id": "QS-056", "category": "SQL Agent",        "spotlightAlarm": "SQL Agent - Alerts",                                 "rgAlertType": "SQL Server log entry",             "matchType": "partial", "thresholdNote": "Keyword pattern matching for SQL Agent alert text in error log", "availableInRG": true },
+    { "id": "QS-057", "category": "SQL Agent",        "spotlightAlarm": "SQL Agent - Jobs Failed",                            "rgAlertType": "Job failing",                      "matchType": "direct",  "thresholdNote": "msdb.dbo.sysjobhistory run_status = 0 (FAILED). Direct equivalent.", "availableInRG": true },
+    { "id": "QS-058", "category": "SQL Agent",        "spotlightAlarm": "SQL Agent - Long Running Jobs (Percent)",            "rgAlertType": "Long running query",               "matchType": "partial", "thresholdNote": "msdb.dbo.sysjobactivity elapsed vs avg runtime. Covers queries, not jobs natively.", "availableInRG": true },
+    { "id": "QS-059", "category": "SQL Agent",        "spotlightAlarm": "SQL Agent - Long Running Jobs (Time)",               "rgAlertType": "Long running query",               "matchType": "partial", "thresholdNote": "msdb.dbo.sysjobactivity DATEDIFF(SECOND, start_execution_date, GETDATE())", "availableInRG": true },
+    { "id": "QS-060", "category": "SQL Agent",        "spotlightAlarm": "SQL Agent - Status",                                 "rgAlertType": "SQL Server unavailable",           "matchType": "partial", "thresholdNote": "Proxy via Job failing alert + SQL Server log entry for Agent service events", "availableInRG": true },
+    { "id": "QS-061", "category": "Custom",           "spotlightAlarm": "SQL Custom Counters",                                "rgAlertType": "Custom metric",                    "matchType": "custom",  "thresholdNote": "Recreate each counter as a custom metric returning a scalar numeric value", "availableInRG": true },
+    { "id": "QS-062", "category": "Custom",           "spotlightAlarm": "SQL Virtual Log Files Count",                        "rgAlertType": "Custom metric",                    "matchType": "custom",  "thresholdNote": "sys.dm_db_log_info COUNT(*) per database; alert > 1000 VLFs", "availableInRG": true },
+    { "id": "QS-063", "category": "Tempdb",           "spotlightAlarm": "Tempdb Auto Growth",                                 "rgAlertType": "Disk space",                       "matchType": "partial", "thresholdNote": "Disk space alert + SQL Server log entry (autogrew keyword). Pre-size tempdb to prevent growth.", "availableInRG": true },
+    { "id": "QS-064", "category": "Tempdb",           "spotlightAlarm": "Tempdb Contention",                                  "rgAlertType": "Custom metric",                    "matchType": "custom",  "thresholdNote": "sys.dm_os_wait_stats PAGELATCH_UP/EX/SH on resource '2:%' (PFS/GAM/SGAM pages)", "availableInRG": true },
+    { "id": "QS-065", "category": "Tempdb",           "spotlightAlarm": "Tempdb File Location",                               "rgAlertType": "NOT AVAILABLE IN REDGATE MONITOR", "matchType": "none",    "thresholdNote": "Configuration audit — enforce via build standards/DSC. Not an ongoing operational alert.", "availableInRG": false },
+    { "id": "QS-066", "category": "Tempdb",           "spotlightAlarm": "Tempdb File Size",                                   "rgAlertType": "Disk space",                       "matchType": "direct",  "thresholdNote": "sys.dm_db_file_space_usage allocated vs total size. Disk Used % threshold.", "availableInRG": true },
+    { "id": "QS-067", "category": "Tempdb",           "spotlightAlarm": "Tempdb Growth Settings",                             "rgAlertType": "NOT AVAILABLE IN REDGATE MONITOR", "matchType": "none",    "thresholdNote": "Configuration audit — enforce via build standards. Not suitable for ongoing alerting.", "availableInRG": false },
+    { "id": "QS-068", "category": "Tempdb",           "spotlightAlarm": "Tempdb Number of Files",                             "rgAlertType": "NOT AVAILABLE IN REDGATE MONITOR", "matchType": "none",    "thresholdNote": "Configuration audit — enforce via build standards. Not suitable for ongoing alerting.", "availableInRG": false },
+    { "id": "QS-069", "category": "Tempdb",           "spotlightAlarm": "Tempdb Version Store Generation Rate",               "rgAlertType": "Custom metric",                    "matchType": "custom",  "thresholdNote": "dm_os_performance_counters Version Generation rate (KB/s); alert > 1024 KB/s sustained", "availableInRG": true },
+    { "id": "QS-070", "category": "Tempdb",           "spotlightAlarm": "Tempdb Version Store Size",                          "rgAlertType": "Custom metric",                    "matchType": "custom",  "thresholdNote": "sys.dm_db_file_space_usage version_store_reserved_page_count * 8 / 1024 MB", "availableInRG": true },
+    { "id": "QS-071", "category": "User",             "spotlightAlarm": "User - Connection Count",                            "rgAlertType": "Custom metric",                    "matchType": "custom",  "thresholdNote": "sys.dm_exec_sessions WHERE is_user_process = 1; compare vs sys.configurations max connections", "availableInRG": true },
+    { "id": "QS-072", "category": "User",             "spotlightAlarm": "User - Logins Per Second",                           "rgAlertType": "Custom metric",                    "matchType": "custom",  "thresholdNote": "dm_os_performance_counters Logins/sec; alert > 200/sec for most workloads", "availableInRG": true },
+    { "id": "QS-073", "category": "User",             "spotlightAlarm": "User - Response Time",                               "rgAlertType": "Custom metric",                    "matchType": "custom",  "thresholdNote": "sys.dm_exec_query_stats AVG(avg_elapsed_time/1000.0) AS avg_response_ms", "availableInRG": true },
+    { "id": "QS-074", "category": "Windows CPU",      "spotlightAlarm": "CPU - Average CPU Usage",                            "rgAlertType": "Processor (CPU) utilization",      "matchType": "direct",  "thresholdNote": "Machine-level CPU % — same semantic. Direct threshold transfer.", "availableInRG": true },
+    { "id": "QS-075", "category": "Windows CPU",      "spotlightAlarm": "CPU - Individual CPU Usage",                         "rgAlertType": "Processor (CPU) utilization",      "matchType": "partial", "thresholdNote": "RG Monitor alerts on overall CPU %. Per-core alerting not supported; use (100 / core_count) as proxy threshold.", "availableInRG": true },
+    { "id": "QS-076", "category": "Windows CPU",      "spotlightAlarm": "CPU - Processor Queue Length",                       "rgAlertType": "Custom metric",                    "matchType": "custom",  "thresholdNote": "sys.dm_os_schedulers AVG(runnable_tasks_count) > 10; approximates OS queue length", "availableInRG": true },
+    { "id": "QS-077", "category": "Windows Custom",   "spotlightAlarm": "Windows Custom Counters",                            "rgAlertType": "Custom metric",                    "matchType": "custom",  "thresholdNote": "Recreate each counter as a custom metric in Redgate Monitor", "availableInRG": true },
+    { "id": "QS-078", "category": "Windows Disks",    "spotlightAlarm": "Disks - Percentage Used / Free Space",               "rgAlertType": "Disk space",                       "matchType": "direct",  "thresholdNote": "Disk Used % — same metric. Direct threshold transfer.", "availableInRG": true },
+    { "id": "QS-079", "category": "Windows Disks",    "spotlightAlarm": "Disk Queue Length",                                  "rgAlertType": "Disk space / avg read-write time", "matchType": "partial", "thresholdNote": "Queue length > 2/spindle indicates I/O saturation; proxy via dm_io_virtual_file_stats avg stall ms", "availableInRG": true },
+    { "id": "QS-080", "category": "Windows Disks",    "spotlightAlarm": "Disks - Transfer Time",                              "rgAlertType": "Disk space / avg read-write time", "matchType": "direct",  "thresholdNote": "I/O latency in ms — same metric. Direct threshold transfer.", "availableInRG": true },
+    { "id": "QS-081", "category": "Windows File",     "spotlightAlarm": "File - Exceeded Set Size",                           "rgAlertType": "NOT AVAILABLE IN REDGATE MONITOR", "matchType": "none",    "thresholdNote": "WMI file size monitoring. No T-SQL equivalent.", "availableInRG": false },
+    { "id": "QS-082", "category": "Windows Memory",   "spotlightAlarm": "Memory - Free System Page Table Entries",            "rgAlertType": "Custom metric",                    "matchType": "custom",  "thresholdNote": "dm_os_performance_counters Free System Page Table Entries; alert < 5000", "availableInRG": true },
+    { "id": "QS-083", "category": "Windows Memory",   "spotlightAlarm": "Memory - Percentage Free Physical Memory",           "rgAlertType": "OS memory available",              "matchType": "direct",  "thresholdNote": "Convert: available_mb = total_RAM_MB × (spotlight_pct ÷ 100)", "availableInRG": true },
+    { "id": "QS-084", "category": "Windows Memory",   "spotlightAlarm": "Memory - Percentage Free Virtual Memory",            "rgAlertType": "OS memory available",              "matchType": "partial", "thresholdNote": "Virtual memory % → MB available physical memory conversion", "availableInRG": true },
+    { "id": "QS-085", "category": "Windows Memory",   "spotlightAlarm": "Memory - Physical Memory Available",                 "rgAlertType": "OS memory available",              "matchType": "direct",  "thresholdNote": "Spotlight MB = Redgate Monitor MB. Direct transfer.", "availableInRG": true },
+    { "id": "QS-086", "category": "Windows Monitored", "spotlightAlarm": "Monitored Server - Windows * (all sub-types)",      "rgAlertType": "RETIRE — Spotlight internal health alarm", "matchType": "retire", "thresholdNote": "Spotlight internal collection/connectivity health. Not recreatable.", "availableInRG": false },
+    { "id": "QS-087", "category": "Windows Network",  "spotlightAlarm": "Network - Percentage Bandwidth",                     "rgAlertType": "Network utilization",              "matchType": "direct",  "thresholdNote": "Enable Network utilization alert in RG Monitor v14+ (disabled by default)", "availableInRG": true },
+    { "id": "QS-088", "category": "Windows Paging",   "spotlightAlarm": "Paging - Disk Activity",                             "rgAlertType": "Custom metric",                    "matchType": "custom",  "thresholdNote": "sys.dm_os_process_memory page_fault_count rate-of-change", "availableInRG": true },
+    { "id": "QS-089", "category": "Windows Paging",   "spotlightAlarm": "Paging - File Collision",                            "rgAlertType": "NOT AVAILABLE IN REDGATE MONITOR", "matchType": "none",    "thresholdNote": "Windows paging file configuration issue. Not T-SQL accessible.", "availableInRG": false },
+    { "id": "QS-090", "category": "Windows Services", "spotlightAlarm": "Services - Service Not Running",                     "rgAlertType": "Custom metric",                    "matchType": "partial", "thresholdNote": "Proxy via SQL Server log entry for known service stop events. Windows services not T-SQL accessible.", "availableInRG": true },
+    { "id": "QS-091", "category": "Windows System",   "spotlightAlarm": "Windows - Up Time",                                  "rgAlertType": "NOT AVAILABLE IN REDGATE MONITOR", "matchType": "none",    "thresholdNote": "No T-SQL equivalent. Monitor via Windows Event Log ID 6005/6006/6008.", "availableInRG": false },
+    { "id": "QS-092", "category": "AG",               "spotlightAlarm": "Availability Group - Failed Over",                   "rgAlertType": "AG / Cluster failover",            "matchType": "direct",  "thresholdNote": "Event-based — no threshold. Primary replica role change detection.", "availableInRG": true },
+    { "id": "QS-093", "category": "AG",               "spotlightAlarm": "Availability Group - Failover Availability",         "rgAlertType": "AG / Cluster failover",            "matchType": "partial", "thresholdNote": "Failover events detected; for readiness: sys.dm_hadr_availability_replica_states synchronization_health_desc", "availableInRG": true },
+    { "id": "QS-094", "category": "AG",               "spotlightAlarm": "Availability Group - Quorum Failure Imminent",       "rgAlertType": "Custom metric",                    "matchType": "custom",  "thresholdNote": "sys.dm_hadr_cluster_members: COUNT(*) WHERE member_state_desc = 'DOWN'", "availableInRG": true },
+    { "id": "QS-095", "category": "AG",               "spotlightAlarm": "Availability Group - Synchronization Health",        "rgAlertType": "Custom metric",                    "matchType": "custom",  "thresholdNote": "sys.dm_hadr_database_replica_states synchronization_health_desc <> 'HEALTHY' OR redo_queue_size > 3072", "availableInRG": true },
+    { "id": "QS-096", "category": "AG Monitored",     "spotlightAlarm": "Monitored Server - Availability Group * (all sub-types)", "rgAlertType": "RETIRE — Spotlight internal health alarm", "matchType": "retire", "thresholdNote": "Spotlight internal AG collection/connectivity health. Not recreatable.", "availableInRG": false }
+  ],
+
+  "migrationSummary": {
+    "totalAlarmsMapped": 96,
+    "directMatch": 22,
+    "partialMatch": 21,
+    "customMetricRequired": 35,
+    "notAvailable": 14,
+    "retire": 4,
+    "coveragePercent": 85,
+    "notAvailableAlarms": [
+      "Performance Investigator",
+      "Poor Performance Health",
+      "LiteSpeed Backup Failed",
+      "LiteSpeed Backup Warning",
+      "Clusters - File Share Witness Inaccessible",
+      "Tempdb File Location",
+      "Tempdb Growth Settings",
+      "Tempdb Number of Files",
+      "File - Exceeded Set Size",
+      "Windows - Up Time",
+      "Services - Power BI Reporting Service",
+      "Paging - File Collision",
+      "Monitored Server (SQL Server) internal alarms — all 8 sub-types",
+      "Monitored Server (Windows) internal alarms — all 7 sub-types",
+      "Monitored Server (AG) internal alarms — all 6 sub-types"
+    ]
+  }
+}
