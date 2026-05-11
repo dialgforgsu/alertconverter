@@ -1912,7 +1912,11 @@ function parseDPAJson(d, idOffset) {
       if (pairs.length) paramStr = pairs.map(([k,v]) => `${k}=${v}`).join('; ');
     }
 
-    const message = [intervalStr, paramStr].filter(Boolean).join(' | ');
+    // DPA alert definitions are global (apply to all monitored instances).
+    // repoName is the DPA repository name, not a SQL Server instance — leave
+    // instance blank so the PS script uses $DefaultInstance from user input.
+    const repoNote = repoName ? `DPA repo: ${repoName}` : '';
+    const message = [repoNote, intervalStr, paramStr].filter(Boolean).join(' | ');
 
     return {
       _id:          idOffset + i,
@@ -1921,7 +1925,7 @@ function parseDPAJson(d, idOffset) {
       alertName:    a.name   || `DPA Alert ${i + 1}`,
       alertType:    a.type   || 'UNKNOWN',
       severity,
-      instance:     repoName,
+      instance:     '',
       startTime:    generatedAt,
       endTime:      '',
       message,
@@ -1929,6 +1933,7 @@ function parseDPAJson(d, idOffset) {
       currentValue: '',
       status:       a.active === false ? 'Inactive' : 'Active',
       _dpaVersion:  dpaVersion,
+      _dpaRepo:     repoName,
       _template:    a.template || ''
     };
   });
@@ -1986,7 +1991,7 @@ async function handleZip(f) {
       fmt = detectFormat(text);
       rows = normalizeCSVText(text, fmt, idOffset);
     }
-    summary.push({ name: fname, fmt, count: rows.length });
+    if (rows.length > 0) summary.push({ name: fname, fmt, count: rows.length });
     allAlerts.push(...rows);
     idOffset += rows.length;
   }
