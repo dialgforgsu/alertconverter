@@ -645,6 +645,44 @@
   .rpt-mapping-row { display: flex; align-items: center; gap: 6px; padding: 6px 0; border-bottom: 0.5px solid var(--border); font-size: 12px; flex-wrap: wrap; }
   .rpt-mapping-row:last-child { border-bottom: none; }
 
+  /* Tool comparison section */
+  .rpt-compare-toggle {
+    display: flex; align-items: center; gap: 8px; cursor: pointer;
+    font-size: 14px; font-weight: 600; padding-bottom: 4px;
+    border-bottom: 0.5px solid var(--border); user-select: none;
+    margin-bottom: 0;
+  }
+  .rpt-compare-toggle:hover { color: var(--blue-mid); }
+  .rpt-compare-toggle .rct-chevron { margin-left: auto; font-size: 11px; transition: transform .2s; }
+  .rpt-compare-toggle.collapsed .rct-chevron { transform: rotate(-90deg); }
+  .rpt-compare-body { margin-top: 12px; }
+  .rpt-compare-body.hidden { display: none; }
+  .rpt-compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  @media (max-width: 700px) { .rpt-compare-grid { grid-template-columns: 1fr; } }
+  .rpt-compare-card {
+    background: var(--bg2); border-radius: var(--radius);
+    padding: 12px 14px; border: 0.5px solid var(--border);
+  }
+  .rct-card-title {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text2); margin-bottom: 8px;
+  }
+  .rct-row {
+    display: flex; gap: 7px; align-items: flex-start;
+    font-size: 12px; line-height: 1.5; padding: 4px 0;
+    border-bottom: 0.5px solid var(--border);
+  }
+  .rct-row:last-child { border-bottom: none; }
+  .rct-pill {
+    flex-shrink: 0; font-size: 10px; font-weight: 600; border-radius: 3px;
+    padding: 1px 5px; margin-top: 1px; text-transform: uppercase; letter-spacing: .03em;
+  }
+  .rct-same    { background: var(--green-bg);  color: var(--green-text);  border: 0.5px solid var(--green-border); }
+  .rct-diff    { background: var(--amber-bg);  color: var(--amber-text);  border: 0.5px solid var(--amber-border); }
+  .rct-warn    { background: #fef2f2;           color: #991b1b;            border: 0.5px solid #fecaca; }
+  .rct-na      { background: var(--bg3);        color: var(--text3);       border: 0.5px solid var(--border2); }
+  [data-theme="dark"] .rct-warn { background: #2d1515; color: #f87171; border-color: #5c2626; }
+
   @media print {
     #summaryOverlay { position: static; overflow: visible; }
     .report-close, .report-print-btn { display: none !important; }
@@ -3167,6 +3205,183 @@ function toggleMatchGroup(header) {
   body.style.display = header.classList.contains('collapsed') ? 'none' : '';
 }
 
+// ── Tool comparison section (togglable in migration report) ───────────────
+function buildToolComparisonSection() {
+  function row(kind, text) {
+    const cls = kind==='same'?'rct-same':kind==='diff'?'rct-diff':kind==='warn'?'rct-warn':'rct-na';
+    const lbl = kind==='same'?'Same':kind==='diff'?'Differs':kind==='warn'?'Watch out':'N/A';
+    return `<div class="rct-row"><span class="rct-pill ${cls}">${lbl}</span><span>${text}</span></div>`;
+  }
+  function card(title, rows) {
+    return `<div class="rpt-compare-card"><div class="rct-card-title">${title}</div>${rows.join('')}</div>`;
+  }
+
+  let cards = [];
+
+  if (sourceMode === 'sqlsentry') {
+    cards = [
+      card('Alert architecture', [
+        row('same',  'Both use threshold-based alerting on SQL Server metrics.'),
+        row('diff',  '<strong>Dynamic Alerts</strong> in Redgate Monitor use ML statistical baselines — not fixed thresholds. Expect different firing times and different query candidates vs SQL Sentry.'),
+        row('diff',  'SQL Sentry conditions can have per-condition evaluation intervals. Redgate Monitor uses fixed collection intervals per alert type; custom metrics default to every 5 minutes.'),
+        row('warn',  'Thresholds are not imported — you must re-enter them manually in Redgate Monitor for each alert type.'),
+      ]),
+      card('Wait time &amp; query performance', [
+        row('same',  'Both delta-collect <code>sys.dm_os_wait_stats</code> and surface top waits.'),
+        row('same',  'Both alert on long-running queries by elapsed time.'),
+        row('diff',  'Wait type classification labels differ slightly. SQL Sentry groups waits into categories; Redgate Monitor shows raw wait types with its own bucketing in the UI.'),
+        row('diff',  'SQL Sentry alerts on individual query spikes. Redgate Monitor Dynamic Alerts detect sustained throughput degradation — micro-spikes are intentionally suppressed.'),
+      ]),
+      card('Blocking &amp; deadlocks', [
+        row('same',  'Both alert on blocking (head-blocker duration threshold).'),
+        row('same',  'Both capture deadlock graphs.'),
+        row('diff',  'SQL Sentry traces the full blocking chain in real time. Redgate Monitor shows the chain in the Blocked Processes view but the alert fires only on head-blocker wait time (≥30s default).'),
+        row('diff',  'Deadlock capture: SQL Sentry uses its own trace; Redgate Monitor reads from the Extended Events <code>system_health</code> session (always-on since SQL Server 2012).'),
+      ]),
+      card('High availability &amp; AG monitoring', [
+        row('diff',  '<strong>SQL Sentry</strong> has continuous replica synchronization state monitoring. <strong>Redgate Monitor</strong> alerts only on role-change / failover events — there is no built-in synchronization health alert.'),
+        row('warn',  'If you rely on replica sync health alerts, you must create a custom metric on <code>sys.dm_hadr_database_replica_states</code>. These are in the Custom metric section of your export.'),
+        row('same',  'Both alert on AG failover / role-change events.'),
+        row('same',  'Both support database mirroring monitoring (where applicable).'),
+      ]),
+      card('Advisory conditions', [
+        row('diff',  'SQL Sentry Advisory Conditions (the advisory pack) are declarative rules evaluated against collected metrics. Redgate Monitor has no built-in equivalents — each must become a custom metric using the T-SQL queries in this export.'),
+        row('warn',  'Budget significant setup time for the Custom metric section — these conditions cannot be activated immediately.'),
+        row('same',  'The T-SQL queries in this export are the exact DMV queries that replicate each advisory condition in Redgate Monitor\'s custom metric engine.'),
+      ]),
+      card('Notifications &amp; routing', [
+        row('same',  'Both support email, and Redgate Monitor supports Slack, PagerDuty, Microsoft Teams, and webhooks in v14.'),
+        row('diff',  'SQL Sentry <strong>Notification Groups</strong> → Redgate Monitor <strong>Notification Profiles</strong>. Concept is the same; both sides must be configured independently.'),
+        row('warn',  'No notification mapping is imported. Recreate each profile in Redgate Monitor under Configuration → Notification profiles, then assign to each alert type.'),
+      ]),
+      card('Scope &amp; granularity', [
+        row('diff',  'SQL Sentry conditions can be scoped to instance, database, or object level. Redgate Monitor built-in alerts are instance-scoped; custom metrics can include a database filter in their T-SQL.'),
+        row('same',  'Both monitor Windows OS-level metrics (CPU, memory, disk) via the monitoring agent, no WMI dependency.'),
+        row('diff',  'SQL Sentry stores per-condition thresholds per monitored server. Redgate Monitor uses global thresholds with per-monitored-server override capability in v14.'),
+      ]),
+    ];
+  } else if (sourceMode === 'dpa') {
+    cards = [
+      card('Monitoring philosophy', [
+        row('diff',  '<strong>DPA</strong> is fundamentally wait-time-centric (Active Session History model): every query second is classified as CPU or a specific wait type. <strong>Redgate Monitor</strong> is broader-purpose — waits are one input alongside OS metrics, blocking, jobs, and backups.'),
+        row('same',  'Both collect <code>sys.dm_os_wait_stats</code> and surface top waits.'),
+        row('diff',  'DPA tracks "database response time" (CPU + wait combined). Redgate Monitor has no direct response-time aggregate alert — use a custom metric combining wait and CPU data as a proxy.'),
+      ]),
+      card('Anomaly detection', [
+        row('same',  'Both use ML-based anomaly detection: DPA\'s Wait Time Anomaly → Redgate Monitor\'s Dynamic Alerts (Waits).'),
+        row('diff',  'DPA\'s anomaly model is trained per wait type and fires on sustained deviation from a per-instance baseline. Redgate Monitor Dynamic Alerts use throughput baselines and may detect different patterns or fire at different times.'),
+        row('warn',  'Do not expect 1:1 alert parity on anomaly conditions — both systems are ML-based but use different training windows and signal sources. Tune thresholds after observing a few weeks of baseline.'),
+      ]),
+      card('Alert definitions &amp; instance binding', [
+        row('diff',  'DPA alert definitions are <strong>global</strong> — they apply to all monitored instances. Redgate Monitor alerts can be tuned per monitored instance.'),
+        row('warn',  'The exported alert definitions have <strong>no SQL Server instance name</strong> embedded. The generated PowerShell script uses the <em>Default instance</em> you specify in Step 3 of this converter. All alerts will annotate that instance.'),
+        row('warn',  'The DPA repository name (e.g. <code>UBUNTU-TEAM-SMITH (dpa_repository)</code>) is <strong>not</strong> a SQL Server instance name. Do not use it as the target instance in Redgate Monitor.'),
+        row('diff',  'DPA evaluates alerts on its own internal schedule. Redgate Monitor evaluates continuously with each collection cycle.'),
+      ]),
+      card('Query analysis', [
+        row('same',  'Both capture top queries by wait time and surface them in the UI.'),
+        row('diff',  'DPA correlates individual query executions with wait time using execution plan history. Redgate Monitor does this via Query Monitor — plan correlation is available but uses a different data model.'),
+        row('diff',  'DPA\'s historical analysis can span weeks or months with full wait breakdown. Redgate Monitor stores rolling history; depth depends on your data retention setting.'),
+      ]),
+      card('Thresholds &amp; alertLevels', [
+        row('warn',  'DPA JSON definitions may export with empty <code>alertLevels</code> for template-based alerts (like the built-in Wait Time Anomaly). No thresholds are imported into the converter — you must set them in Redgate Monitor directly.'),
+        row('diff',  'DPA template alerts (numbered, e.g. template 52) are built-in definitions with internal tuning parameters that are not exported. The equivalent Redgate Monitor alert type is matched by name and type code but internal sensitivity may differ.'),
+      ]),
+      card('Notifications &amp; routing', [
+        row('same',  'Both support email notifications.'),
+        row('diff',  'DPA <strong>notification targets</strong> (email, SNMP, etc.) → Redgate Monitor <strong>notification profiles</strong>. Both sides must be configured independently.'),
+        row('warn',  'No notification mapping is imported. Recreate each profile in Redgate Monitor under Configuration → Notification profiles.'),
+        row('same',  'Redgate Monitor v14 additionally supports Slack, PagerDuty, Microsoft Teams, and webhooks.'),
+      ]),
+    ];
+  } else if (sourceMode === 'idera') {
+    cards = [
+      card('Alert architecture', [
+        row('same',  'Both use threshold-based alerting on SQL Server and OS metrics.'),
+        row('same',  'Both support instance-level and database-level alert scope.'),
+        row('diff',  'IDERA\'s <strong>Baseline alerting</strong> auto-adjusts thresholds from observed baselines. Redgate Monitor\'s <strong>Dynamic Alerts</strong> serve the same purpose but use a different ML model — expect some firing behavior differences during the initial baseline learning period.'),
+        row('warn',  'Thresholds are not imported. Re-enter them manually in Redgate Monitor for each alert type.'),
+      ]),
+      card('OS &amp; hypervisor metrics', [
+        row('diff',  'IDERA uses <strong>WMI</strong> for several OS metrics (disk queue length, OS disk time). Redgate Monitor uses its own collection agent — these specific WMI-sourced metrics are not available.'),
+        row('na',    'VMware/Hyper-V host metrics (host CPU, host memory, VM CPU ready wait, VM power state, etc.) are <strong>not available</strong> in Redgate Monitor. No T-SQL equivalent exists for hypervisor-layer data.'),
+        row('na',    'WMI Service Unavailable alert has no equivalent in Redgate Monitor.'),
+        row('same',  'Standard OS metrics (CPU %, memory available, disk space %) are collected by Redgate Monitor\'s agent without WMI.'),
+      ]),
+      card('Blocking &amp; waits', [
+        row('same',  'Both alert on blocking by head-blocker duration.'),
+        row('same',  'Both collect wait stats and surface top waits.'),
+        row('diff',  'IDERA can alert on detailed wait categories (lock waits, I/O waits, etc.) individually. Redgate Monitor alerts on aggregate wait time; per-wait-type breakdown requires a custom metric on <code>sys.dm_os_wait_stats</code>.'),
+      ]),
+      card('Azure &amp; cloud support', [
+        row('na',    'IDERA Azure DB Service Tier Changes alert has no equivalent in Redgate Monitor — this is an Azure platform event. Use Azure Monitor or Azure Advisor instead.'),
+        row('same',  'Both can monitor Azure SQL Managed Instances with appropriate network/auth configuration.'),
+      ]),
+      card('Internal health alerts', [
+        row('na',    'IDERA SQLDM Repository Grooming and OS Metrics Collection Status alerts have no equivalent in Redgate Monitor — these are IDERA internal health checks.'),
+        row('diff',  'Redgate Monitor has its own agent health monitoring built in (visible in Configuration → Monitored servers). No separate health alert condition is needed.'),
+      ]),
+      card('Notifications &amp; routing', [
+        row('same',  'Both support email notifications.'),
+        row('diff',  'IDERA <strong>Alert Actions</strong> and <strong>Subscriptions</strong> → Redgate Monitor <strong>Notification Profiles</strong>. Concept is the same; reconfigure independently.'),
+        row('warn',  'No notification mapping is imported. Recreate each profile in Redgate Monitor under Configuration → Notification profiles, then assign to each alert type.'),
+        row('same',  'Redgate Monitor v14 additionally supports Slack, PagerDuty, Microsoft Teams, and webhooks.'),
+      ]),
+    ];
+  } else {
+    // Quest Spotlight
+    cards = [
+      card('Alert architecture', [
+        row('same',  'Both use threshold-based alerting on SQL Server and OS metrics.'),
+        row('diff',  'Quest Spotlight organizes alarms into <strong>Spotlight Collections</strong> (CPU, locks, SQL activity, etc.) with a visual "drilldown" diagnostic model. Redgate Monitor uses a flat alert type hierarchy with a linear UI.'),
+        row('diff',  'Spotlight alarm names use Quest\'s internal naming conventions (e.g. "SQL Server · CPU · User Time"). The converter maps these heuristically — review partial matches carefully.'),
+        row('warn',  'Thresholds are not imported. Re-enter them manually in Redgate Monitor for each alert type.'),
+      ]),
+      card('Wait time &amp; query performance', [
+        row('same',  'Both monitor SQL Server wait stats and surface top waits.'),
+        row('diff',  'Spotlight\'s wait state classification uses its own categories that do not map 1:1 to <code>sys.dm_os_wait_stats</code> wait type names. Redgate Monitor uses DMV wait types directly.'),
+        row('same',  'Both alert on long-running queries and blocking.'),
+        row('diff',  'Spotlight\'s SQL Activity collection shows live session detail. Redgate Monitor\'s equivalent is the Top Queries and Blocked Processes views.'),
+      ]),
+      card('OS &amp; host metrics', [
+        row('same',  'Both collect CPU, memory, and disk metrics at OS level.'),
+        row('diff',  'Spotlight can alert on individual Windows performance counters. Redgate Monitor monitors a fixed set of OS metrics — arbitrary perfmon counter alerts are not available without a custom metric.'),
+      ]),
+      card('Alarm severity mapping', [
+        row('same',  'Quest alarms map to Redgate Monitor severity levels: Informational/Low → Low, Medium → Medium, High/Critical → High.'),
+        row('diff',  'Quest has a "severity 0" (informational) that doesn\'t have a direct equivalent — these map to Low severity in Redgate Monitor.'),
+      ]),
+      card('Notifications &amp; routing', [
+        row('same',  'Both support email notifications.'),
+        row('diff',  'Quest Spotlight <strong>Alarm Actions</strong> → Redgate Monitor <strong>Notification Profiles</strong>. Concept is the same; reconfigure independently.'),
+        row('warn',  'No notification mapping is imported. Recreate each profile in Redgate Monitor under Configuration → Notification profiles, then assign to each alert type.'),
+        row('same',  'Redgate Monitor v14 additionally supports Slack, PagerDuty, Microsoft Teams, and webhooks.'),
+      ]),
+      card('Connection &amp; instance model', [
+        row('same',  'Both connect to SQL Server instances via Windows Auth or SQL Auth.'),
+        row('diff',  'Spotlight uses its own "Spotlight Connections" model with Spotlight agents. Redgate Monitor uses a single lightweight agent per monitored server that reports to the Redgate Monitor base.'),
+        row('diff',  'Quest Spotlight Cloud alarms include cloud URL identifiers. The converter strips these; verify that the SQL Server instance names used in this export match how they appear in Redgate Monitor.'),
+      ]),
+    ];
+  }
+
+  return `<div class="report-section" id="rptCompareSec">
+    <div class="rpt-compare-toggle" onclick="toggleRptCompare(this)">
+      <span>&#9432;</span>
+      <span>${sourceMode==='sqlsentry'?'SQL Sentry':sourceMode==='dpa'?'SolarWinds DPA':sourceMode==='idera'?'IDERA SQL Diagnostic Manager':'Quest Spotlight'} vs Redgate Monitor — key differences &amp; migration notes</span>
+      <span class="rct-chevron">&#9660;</span>
+    </div>
+    <div class="rpt-compare-body">
+      <div class="rpt-compare-grid">${cards.join('')}</div>
+    </div>
+  </div>`;
+}
+
+function toggleRptCompare(el) {
+  el.classList.toggle('collapsed');
+  el.nextElementSibling.classList.toggle('hidden');
+}
+
 // ── Summary / migration report ─────────────────────────────────────────────
 function showSummaryReport() {
   const mapped = getMapped();
@@ -3270,6 +3485,8 @@ Recommended order: (1) Activate direct replacements immediately. (2) Review beha
       <div class="report-stat"><div class="n" style="color:var(--red-text)">${none}</div><div class="l">✗ Not available</div></div>
       ${retire > 0 ? `<div class="report-stat"><div class="n" style="color:var(--text3)">${retire}</div><div class="l">🗑 Retire</div></div>` : ''}
     </div>
+
+    ${buildToolComparisonSection()}
 
     ${none > 0 ? `<div class="report-section">
       <div class="report-section-title">Gap analysis — conditions not available in Redgate Monitor</div>
