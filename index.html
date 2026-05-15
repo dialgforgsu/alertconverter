@@ -683,6 +683,61 @@
   .rct-na      { background: var(--bg3);        color: var(--text3);       border: 0.5px solid var(--border2); }
   [data-theme="dark"] .rct-warn { background: #2d1515; color: #f87171; border-color: #5c2626; }
 
+  /* ── Confidence tier pills (alert cards) ───────────────────────────────── */
+  .conf-pill { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 700; border-radius: 3px; padding: 1px 6px; white-space: nowrap; letter-spacing: .02em; }
+  .conf-dot  { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .conf-direct  { background: var(--green-bg);  color: var(--green-text);  border: 0.5px solid var(--green-border); }
+  .conf-adapted { background: var(--amber-bg);  color: var(--amber-text);  border: 0.5px solid var(--amber-border); }
+  .conf-prebuilt{ background: #eef0ff;           color: #3b3fa8;            border: 0.5px solid #b8bcf0; }
+  .conf-custom  { background: var(--purple-bg); color: var(--purple-text); border: 0.5px solid var(--purple-border); }
+  .conf-none    { background: var(--red-bg);    color: var(--red-text);    border: 0.5px solid var(--red-border); }
+  .conf-retire  { background: var(--bg3);       color: var(--text3);       border: 0.5px solid var(--border2); }
+  [data-theme="dark"] .conf-prebuilt { background: #1c1e45; color: #9fa5f5; border-color: #3a3f8c; }
+
+  /* ── Threshold adaptation display ──────────────────────────────────────── */
+  .thresh-adapt { font-size: 11px; color: var(--text3); margin-top: 4px; display: flex; align-items: baseline; gap: 5px; flex-wrap: wrap; background: var(--amber-bg); border: 0.5px solid var(--amber-border); border-radius: 4px; padding: 3px 8px; }
+  .thresh-original { text-decoration: line-through; opacity: .55; color: var(--text3); }
+  .thresh-arrow  { color: var(--amber-text); font-weight: 700; }
+  .thresh-adapted{ color: var(--amber-text); font-weight: 700; }
+  .thresh-note   { color: var(--amber-text); opacity: .8; font-style: italic; }
+
+  /* ── Effort estimate bar (migration report) ─────────────────────────────── */
+  .rpt-effort { margin-bottom: 1.25rem; }
+  .rpt-effort-header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+  .rpt-effort-title  { font-size: 13px; font-weight: 600; }
+  .rpt-effort-total  { font-size: 12px; color: var(--text2); }
+  .rpt-effort-bar { display: flex; border-radius: var(--radius); overflow: hidden; height: 22px; background: var(--bg3); }
+  .rpt-eff-seg { display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; min-width: 0; padding: 0 4px; }
+  .rpt-eff-direct { background: var(--green-text); }
+  .rpt-eff-partial{ background: var(--amber-text); }
+  .rpt-eff-custom { background: var(--purple-text); }
+  .rpt-eff-none   { background: var(--text3); }
+  .rpt-effort-legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 7px; }
+  .rpt-eff-leg { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text2); }
+  .rpt-eff-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+  /* ── Prioritized checklist (migration report) ───────────────────────────── */
+  .rpt-checklist { list-style: none; padding: 0; margin: 0; }
+  .rpt-cl-item { display: flex; gap: 10px; align-items: flex-start; padding: 9px 0; border-bottom: 0.5px solid var(--border); }
+  .rpt-cl-item:last-child { border-bottom: none; }
+  .rpt-cl-num { flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; background: var(--blue-mid); color: #fff; font-size: 10px; font-weight: 800; display: flex; align-items: center; justify-content: center; margin-top: 1px; }
+  .rpt-cl-body { font-size: 12px; line-height: 1.5; flex: 1; }
+  .rpt-cl-body strong { display: block; font-size: 13px; margin-bottom: 2px; }
+  .rpt-cl-sub { color: var(--text2); font-size: 11px; margin-top: 1px; }
+  .rpt-cl-badge { font-size: 10px; font-weight: 600; background: var(--bg3); border: 0.5px solid var(--border2); border-radius: 3px; padding: 1px 6px; color: var(--text2); margin-left: 4px; white-space: nowrap; }
+
+  /* ── Migration surfaces guide (migration report) ────────────────────────── */
+  .rpt-surfaces-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+  @media (max-width: 680px) { .rpt-surfaces-grid { grid-template-columns: 1fr; } }
+  .rpt-surf-card { background: var(--bg2); border-radius: var(--radius); padding: 14px 16px; border: 0.5px solid var(--border); }
+  .rpt-surf-title { font-size: 12px; font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 7px; color: var(--text); }
+  .rpt-surf-icon { font-size: 16px; }
+  .rpt-surf-step { display: flex; gap: 7px; align-items: flex-start; font-size: 11.5px; line-height: 1.5; padding: 3px 0; color: var(--text2); }
+  .rpt-surf-step + .rpt-surf-step { border-top: 0.5px solid var(--border); padding-top: 5px; margin-top: 2px; }
+  .rpt-ss-num { flex-shrink: 0; width: 15px; height: 15px; border-radius: 50%; background: var(--bg3); border: 0.5px solid var(--border2); font-size: 9px; font-weight: 800; display: flex; align-items: center; justify-content: center; margin-top: 2px; color: var(--text3); }
+  .rpt-surf-note { font-size: 10px; background: var(--amber-bg); color: var(--amber-text); border: 0.5px solid var(--amber-border); border-radius: 3px; padding: 1px 5px; margin-top: 4px; display: inline-block; }
+  .rpt-surf-good { font-size: 10px; background: var(--green-bg); color: var(--green-text); border: 0.5px solid var(--green-border); border-radius: 3px; padding: 1px 5px; margin-top: 4px; display: inline-block; }
+
   @media print {
     #summaryOverlay { position: static; overflow: visible; }
     .report-close, .report-print-btn { display: none !important; }
@@ -3029,16 +3084,21 @@ function openCmModal(alert) {
   const key = (r.rgType + '|' + alert.alertName).toLowerCase();
   cmCurrent = { key, alert, r };
 
-  const saved = cmDefs[key] || {};
+  const saved    = cmDefs[key] || {};
+  const autoDef  = AUTO_CM_DEFAULTS[r.rgType] || {};
+  const autoSQL  = extractSQLFromNote(r.note);
+  const adapt    = adaptThreshold(alert, r);
+  const autoHigh = adapt?.adapted && adapt.adapted !== '?' ? adapt.adapted.replace(/[^0-9.]/g,'') : (autoDef.high || '');
+
   document.getElementById('cmTitle').textContent = 'Configure Custom Metric — ' + (alert.alertName || r.rgType);
   document.getElementById('cmName').value    = saved.name    || alert.alertName || r.rgType;
   document.getElementById('cmDesc').value    = saved.desc    || r.note.split('—')[0].trim().replace(/^SELECT.+/i,'').trim() || '';
-  document.getElementById('cmSQL').value     = saved.sql     || extractSQLFromNote(r.note) || '-- Paste your T-SQL query here\n-- Must return a single numeric value\nSELECT 0 AS metric_value';
-  document.getElementById('cmUnit').value    = saved.unit    || 'Count';
-  document.getElementById('cmInterval').value= saved.interval|| '5 minutes';
-  document.getElementById('cmLow').value     = saved.low     || '';
-  document.getElementById('cmMed').value     = saved.med     || '';
-  document.getElementById('cmHigh').value    = saved.high    || '';
+  document.getElementById('cmSQL').value     = saved.sql     || autoSQL || '-- Paste your T-SQL query here\n-- Must return a single numeric value\nSELECT 0 AS metric_value';
+  document.getElementById('cmUnit').value    = saved.unit    || autoDef.unit     || 'Count';
+  document.getElementById('cmInterval').value= saved.interval|| autoDef.interval || '5 minutes';
+  document.getElementById('cmLow').value     = saved.low     || autoDef.low      || '';
+  document.getElementById('cmMed').value     = saved.med     || autoDef.med      || '';
+  document.getElementById('cmHigh').value    = saved.high    || autoHigh         || autoDef.high || '';
 
   document.getElementById('cmBackdrop').classList.remove('hidden');
   document.getElementById('cmPanel').classList.remove('hidden');
@@ -3095,6 +3155,95 @@ ${sql.split('\n').map(l => '# ' + l).join('\n')}`;
   });
 }
 
+// ── Auto-populated custom metric defaults ─────────────────────────────────
+// Keyed by rgType — fills unit/interval/thresholds when user opens CM modal
+// with no saved definition. SQL is still pulled from extractSQLFromNote(r.note).
+const AUTO_CM_DEFAULTS = {
+  'Waits (custom metric)':              { unit:'ms',      interval:'5 minutes',  low:'1000',  med:'5000',  high:'15000' },
+  'Dynamic alerts — Waits':             { unit:'ms',      interval:'5 minutes',  low:'500',   med:'2000',  high:'10000' },
+  'Processor (CPU) utilization':        { unit:'%',       interval:'1 minute',   low:'70',    med:'85',    high:'95'    },
+  'OS memory available':                { unit:'MB',      interval:'1 minute',   low:'2048',  med:'1024',  high:'512'   },
+  'Disk space':                         { unit:'%',       interval:'5 minutes',  low:'75',    med:'85',    high:'95'    },
+  'Disk space / avg read-write time':   { unit:'ms',      interval:'1 minute',   low:'10',    med:'25',    high:'50'    },
+  'Blocking processes':                 { unit:'seconds', interval:'1 minute',   low:'30',    med:'60',    high:'120'   },
+  'Backup overdue':                     { unit:'hours',   interval:'1 hour',     low:'25',    med:'49',    high:'73'    },
+  'Long running query':                 { unit:'seconds', interval:'1 minute',   low:'30',    med:'90',    high:'300'   },
+  'Job failing':                        { unit:'Count',   interval:'5 minutes',  low:'1',     med:'1',     high:'1'     },
+  'Deadlock (Extended Events)':         { unit:'Count',   interval:'5 minutes',  low:'1',     med:'3',     high:'10'    },
+  'Network utilization':                { unit:'%',       interval:'5 minutes',  low:'70',    med:'85',    high:'95'    },
+  'Custom metric':                      { unit:'Count',   interval:'5 minutes',  low:'1',     med:'5',     high:'10'    },
+  'Custom metric + alert':              { unit:'Count',   interval:'5 minutes',  low:'1',     med:'5',     high:'10'    },
+};
+
+// ── Threshold adaptation (Tier 2 auto-resolution) ─────────────────────────
+// Returns {original, adapted, note} when a threshold needs unit conversion,
+// or null when the threshold is directly compatible.
+function adaptThreshold(a, r) {
+  const name   = (a.alertName || '').toLowerCase();
+  const thresh = (a.threshold || '').trim();
+  if (!thresh) return null;
+
+  const num     = parseFloat(thresh);
+  const hasNum  = !isNaN(num);
+  const lower   = thresh.toLowerCase();
+
+  // Backup: days → hours
+  if (r.rgType === 'Backup overdue' && hasNum) {
+    if (lower.includes('day') || (!lower.includes('hour') && num > 0 && num <= 30)) {
+      const hrs = Math.round(num * 24);
+      return { original: thresh, adapted: `${hrs} hours`, note: `×24 — Redgate Monitor uses hours, not days` };
+    }
+  }
+
+  // Any explicit "X days" → hours for non-backup contexts
+  const dayMatch = thresh.match(/^(\d+(?:\.\d+)?)\s*days?$/i);
+  if (dayMatch && r.rgType !== 'Annotation (threshold)') {
+    const days = parseFloat(dayMatch[1]);
+    return { original: thresh, adapted: `${Math.round(days * 24)} hours`, note: `×24 — Redgate Monitor uses hours` };
+  }
+
+  // Memory: % consumed → Redgate Monitor uses MB available (cannot auto-convert, explain)
+  if (r.rgType === 'OS memory available' && lower.includes('%')) {
+    return { original: thresh, adapted: null, note: `RG uses MB available, not % consumed — set threshold = Total RAM × (1 − ${thresh}) ÷ 100` };
+  }
+
+  // Wait time: seconds → ms
+  if ((r.rgType === 'Waits (custom metric)' || r.rgType === 'Dynamic alerts — Waits') && hasNum && !lower.includes('ms') && !lower.includes('sec') && num < 1000) {
+    return { original: thresh, adapted: `${num * 1000} ms`, note: `×1000 — Redgate Monitor custom metric uses milliseconds` };
+  }
+
+  // Disk I/O: avg ms threshold (source may use seconds)
+  if (r.rgType === 'Disk space / avg read-write time' && hasNum && lower.includes('sec')) {
+    return { original: thresh, adapted: `${Math.round(num * 1000)} ms`, note: `×1000 — Redgate Monitor uses ms for disk latency` };
+  }
+
+  return null;
+}
+
+// ── Confidence tier per alert ─────────────────────────────────────────────
+function getConfidenceTier(r, a) {
+  const hasSQL = !!(cmDefs[((r.rgType)+'|'+a.alertName).toLowerCase()]?.sql || extractSQLFromNote(r.note));
+  const adapt  = adaptThreshold(a, r);
+  switch (r.match) {
+    case 'direct':
+      return { cls:'conf-direct',   label:'Direct',    desc:'Maps exactly — enable and set threshold in Redgate Monitor' };
+    case 'partial':
+      return adapt && adapt.adapted
+        ? { cls:'conf-adapted',  label:'Adapted',   desc:'Threshold converted — verify values before enabling' }
+        : { cls:'conf-adapted',  label:'Partial',   desc:'Review behavior differences noted below before enabling' };
+    case 'custom':
+      return hasSQL
+        ? { cls:'conf-prebuilt', label:'Pre-built',  desc:'T-SQL query provided — create the metric in RG and deploy' }
+        : { cls:'conf-custom',   label:'Custom',     desc:'No T-SQL yet — click Configure to write the custom metric query' };
+    case 'none':
+      return { cls:'conf-none',    label:'No equivalent', desc:'No Redgate Monitor equivalent — see gap analysis' };
+    case 'retire':
+      return { cls:'conf-retire',  label:'Retire',   desc:'Redgate Monitor\'s model makes this unnecessary — do not recreate' };
+    default:
+      return { cls:'conf-adapted', label:'Review',   desc:'Needs manual review' };
+  }
+}
+
 // ── Visual grouped alert list ──────────────────────────────────────────────
 function renderAlertList(mapped) {
   const sorted = sortMapped(mapped);
@@ -3124,6 +3273,9 @@ function renderAlertList(mapped) {
       const sevClass = sev === 'high' ? 'badge-high' : sev === 'medium' ? 'badge-med' : 'badge-low';
       const cmKey = (r.rgType + '|' + a.alertName).toLowerCase();
       const hasDef = !!cmDefs[cmKey];
+      const conf   = getConfidenceTier(r, a);
+      const adapt  = adaptThreshold(a, r);
+
       const cmBadge = gc.key === 'custom'
         ? `<button class="cm-btn" onclick="openCmModal(alerts[${a._id}])">${hasDef ? '&#10003; Configured' : '&#9881; Configure'}</button>`
         : '';
@@ -3133,6 +3285,18 @@ function renderAlertList(mapped) {
         ? `<span class="note-pill" style="background:var(--bg3);color:var(--text3);border-color:var(--border2)" title="${esc(r.note)}">🗑 Retire</span>`
         : gc.key === 'partial'
         ? `<span class="note-pill" style="background:var(--amber-bg);color:var(--amber-text);border-color:var(--amber-border)" title="${esc(r.note)}">⚠ Behavior differs</span>`
+        : '';
+
+      // Threshold display — show adaptation when it applies
+      const threshDisplay = adapt
+        ? `<span class="thresh-adapt">
+            <span class="thresh-original">${esc(a.threshold)}</span>
+            <span class="thresh-arrow">→</span>
+            ${adapt.adapted ? `<span class="thresh-adapted">${esc(adapt.adapted)}</span>` : ''}
+            <span class="thresh-note">${esc(adapt.note)}</span>
+          </span>`
+        : a.threshold
+        ? `<span style="font-size:11px;color:var(--text3);margin-top:3px">Threshold: ${esc(a.threshold)}</span>`
         : '';
 
       // For custom-metric cards: resolve and cache the T-SQL, then render inline
@@ -3167,6 +3331,7 @@ function renderAlertList(mapped) {
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             <span class="alert-card-name">${esc(a.alertName||'(unnamed)')}</span>
             <span class="badge ${sevClass}">${esc(a.severity||'—')}</span>
+            <span class="conf-pill ${conf.cls}" title="${esc(conf.desc)}"><span class="conf-dot"></span>${conf.label}</span>
           </div>
           <div class="alert-card-meta">${esc(a.instance||'—')} &middot; ${esc(a.startTime||'definition only')}</div>
           <div class="alert-card-mapping">
@@ -3174,10 +3339,10 @@ function renderAlertList(mapped) {
               <span>${srcLabel}: <strong>${esc(a.alertType||'—')}</strong></span>
               <span class="flow-arrow">→</span>
               <span>RG: <strong>${esc(r.rgType)}</strong></span>
-              ${a.threshold ? `<span style="color:var(--text3)">· threshold ${esc(a.threshold)}</span>` : ''}
             </div>
             ${cmBadge}${noteBadge}
           </div>
+          ${threshDisplay}
           ${(gc.key === 'none' || gc.key === 'retire' || gc.key === 'partial') ? `<div style="font-size:11px;color:var(--text3);margin-top:3px">${esc(r.note)}</div>` : ''}
           ${sqlBlock}
         </div>
@@ -3408,6 +3573,71 @@ function showSummaryReport() {
     .filter(({ r }) => r.match === 'custom')
     .map(({ r }) => r.rgType))];
 
+  // ── Effort estimate ────────────────────────────────────────────────────────
+  // Direct: 5 min (enable + set threshold). Partial: 25 min (review + adjust).
+  // Custom with T-SQL: 40 min per unique type. Custom no T-SQL: 90 min per type.
+  // None: 0 (accept the gap).
+  const uniqueCustomWithSQL    = [...new Set(incResolved.filter(({r}) => r.match==='custom' && (cmDefs[((r.rgType)+'|'+'x').split('|')[0]] || extractSQLFromNote(r.note))).map(({r})=>r.rgType))];
+  const uniqueCustomNoSQL      = [...new Set(incResolved.filter(({r}) => r.match==='custom' && !extractSQLFromNote(r.note)).map(({r})=>r.rgType))].filter(t => !uniqueCustomWithSQL.includes(t));
+  const allUniqueCustom        = [...new Set(incResolved.filter(({r})=>r.match==='custom').map(({r})=>r.rgType))];
+  const sqlCoveredTypes        = new Set(incResolved.filter(({r,a}) => r.match==='custom' && (cmDefs[((r.rgType)+'|'+a.alertName).toLowerCase()]?.sql || extractSQLFromNote(r.note))).map(({r})=>r.rgType));
+  const noSQLTypes             = allUniqueCustom.filter(t => !sqlCoveredTypes.has(t));
+  const effortDirectMin  = direct * 5;
+  const effortPartialMin = partial * 25;
+  const effortCustomMin  = sqlCoveredTypes.size * 40 + noSQLTypes.length * 90;
+  const effortTotalMin   = effortDirectMin + effortPartialMin + effortCustomMin;
+  const effortHours      = effortTotalMin >= 60 ? `${(effortTotalMin/60).toFixed(1)}h` : `${effortTotalMin}m`;
+  const barTotal         = Math.max(effortTotalMin, 1);
+  const pctDirect  = Math.round(effortDirectMin  / barTotal * 100);
+  const pctPartial = Math.round(effortPartialMin / barTotal * 100);
+  const pctCustom  = Math.round(effortCustomMin  / barTotal * 100);
+  const pctNone    = Math.max(0, 100 - pctDirect - pctPartial - pctCustom);
+
+  const effortBar = `<div class="rpt-effort">
+    <div class="rpt-effort-header">
+      <span class="rpt-effort-title">Estimated migration effort</span>
+      <span class="rpt-effort-total">~${effortHours} total &nbsp;·&nbsp; ${direct} direct · ${partial} to review · ${allUniqueCustom.length} unique custom metric${allUniqueCustom.length!==1?'s':''} · ${none} gaps</span>
+    </div>
+    <div class="rpt-effort-bar">
+      ${pctDirect  > 0 ? `<div class="rpt-eff-seg rpt-eff-direct"  style="width:${pctDirect}%">${effortDirectMin >= 10 ? effortDirectMin+'m' : ''}</div>` : ''}
+      ${pctPartial > 0 ? `<div class="rpt-eff-seg rpt-eff-partial" style="width:${pctPartial}%">${effortPartialMin >= 10 ? effortPartialMin+'m' : ''}</div>` : ''}
+      ${pctCustom  > 0 ? `<div class="rpt-eff-seg rpt-eff-custom"  style="width:${pctCustom}%">${effortCustomMin >= 10 ? effortCustomMin+'m' : ''}</div>` : ''}
+      ${pctNone    > 0 ? `<div class="rpt-eff-seg rpt-eff-none"    style="width:${pctNone}%"></div>` : ''}
+    </div>
+    <div class="rpt-effort-legend">
+      <span class="rpt-eff-leg"><span class="rpt-eff-dot" style="background:var(--green-text)"></span>Direct (~5 min each)</span>
+      <span class="rpt-eff-leg"><span class="rpt-eff-dot" style="background:var(--amber-text)"></span>Partial (~25 min each)</span>
+      <span class="rpt-eff-leg"><span class="rpt-eff-dot" style="background:var(--purple-text)"></span>Custom metric (~40–90 min per type)</span>
+      ${none > 0 ? `<span class="rpt-eff-leg"><span class="rpt-eff-dot" style="background:var(--text3)"></span>Gaps (accept or plan alternative)</span>` : ''}
+    </div>
+  </div>`;
+
+  // ── Prioritized checklist ──────────────────────────────────────────────────
+  const clSteps = [];
+  clSteps.push({ title: `Download and place the Redgate Monitor PowerShell module`, sub: `Configuration → PowerShell API → Download module. Save RedgateSQM.psm1 in the same folder as the generated script.` });
+  if (direct > 0)   clSteps.push({ title: `Enable ${direct} direct-match alert${direct!==1?'s':''}`, sub: `Redgate Monitor → Alert settings → enable each listed alert type. Set thresholds — refer to your ${srcLabel} values. Estimated: ~${Math.round(effortDirectMin/60*10)/10}h.` });
+  if (partial > 0)  clSteps.push({ title: `Review ${partial} partial-match alert${partial!==1?'s':''} before enabling`, sub: `Read the behavior notes in the Preview tab for each partial match. Detection method, timing, or fidelity differs from ${srcLabel}. Estimated: ~${Math.round(effortPartialMin/60*10)/10}h.` });
+  if (allUniqueCustom.length > 0) clSteps.push({ title: `Deploy ${allUniqueCustom.length} custom metric type${allUniqueCustom.length!==1?'s':''}`, sub: `Configuration → Custom metrics and alerts → Add custom metric. ${sqlCoveredTypes.size > 0 ? `${sqlCoveredTypes.size} have T-SQL ready in this export.` : ''} ${noSQLTypes.length > 0 ? `${noSQLTypes.length} need custom T-SQL queries written.` : ''} Estimated: ~${Math.round(effortCustomMin/60*10)/10}h.` });
+  if (notifGroups.filter(g=>g.ssGroup).length > 0) clSteps.push({ title: `Configure ${notifGroups.filter(g=>g.ssGroup).length} notification profile${notifGroups.filter(g=>g.ssGroup).length!==1?'s':''}`, sub: `Redgate Monitor → Configuration → Notification profiles. Create each profile, then assign to the relevant alert types in Alert settings.` });
+  clSteps.push({ title: `Run the generated PowerShell module`, sub: `Use -WhatIf first for a dry run: Import-Module .\\${fnName}.psm1 → ${fnName} -WhatIf -Verbose. Then run live: ${fnName}.` });
+  if (none > 0)     clSteps.push({ title: `Document ${none} monitoring gap${none!==1?'s':''}`, sub: `These conditions have no Redgate Monitor equivalent. Review the gap analysis section and determine whether to accept the gap, monitor manually, or use a third-party tool.` });
+  if (retire > 0)   clSteps.push({ title: `Intentionally retire ${retire} condition${retire!==1?'s':''}`, sub: `These conditions are not recommended in Redgate Monitor. Do not recreate them — they generate noise without actionable signal in RG's monitoring model.` });
+  clSteps.push({ title: `Validate alert coverage after go-live`, sub: `Monitor Redgate Monitor → Alert history for 1–2 weeks. Compare firing patterns against your previous ${srcLabel} alert log to confirm coverage is equivalent or better.` });
+
+  const checklistHtml = `<div class="report-section">
+    <div class="rpt-compare-toggle" onclick="toggleRptCompare(this)">
+      <span>&#10003;</span>
+      <span>Prioritized migration checklist</span>
+      <span class="rct-chevron">&#9660;</span>
+    </div>
+    <div class="rpt-compare-body">
+      <ol class="rpt-checklist">${clSteps.map((s,i) => `<li class="rpt-cl-item">
+        <span class="rpt-cl-num">${i+1}</span>
+        <div class="rpt-cl-body"><strong>${s.title}</strong><div class="rpt-cl-sub">${s.sub}</div></div>
+      </li>`).join('')}</ol>
+    </div>
+  </div>`;
+
   const summaryText = `This migration plan evaluates ${inc.length} ${srcLabel} conditions against Redgate Monitor equivalents.
 ${direct} condition${direct!==1?'s':''} (${directPct}%) map directly to built-in Redgate Monitor alert types and can be activated immediately with no additional configuration required.
 ${partial > 0 ? `${partial} condition${partial!==1?'s':''} have partial equivalents — built-in Redgate Monitor alerts cover the intent but detection method, timing, or fidelity differs from SQL Sentry. Review behavior notes before enabling.` : ''}
@@ -3486,6 +3716,10 @@ Recommended order: (1) Activate direct replacements immediately. (2) Review beha
       ${retire > 0 ? `<div class="report-stat"><div class="n" style="color:var(--text3)">${retire}</div><div class="l">🗑 Retire</div></div>` : ''}
     </div>
 
+    ${effortBar}
+
+    ${checklistHtml}
+
     ${buildToolComparisonSection()}
 
     ${none > 0 ? `<div class="report-section">
@@ -3512,6 +3746,75 @@ Recommended order: (1) Activate direct replacements immediately. (2) Review beha
     </div>` : ''}
 
     ${notifSection}
+
+    ${none > 0 || retire > 0 ? `<div class="report-section">
+      <div class="rpt-compare-toggle" onclick="toggleRptCompare(this)">
+        <span>&#9888;</span>
+        <span>What you're losing — operational impact of gaps</span>
+        <span class="rct-chevron">&#9660;</span>
+      </div>
+      <div class="rpt-compare-body">
+        <p style="font-size:12px;color:var(--text2);margin:0 0 10px">The ${none + retire} conditions below either have no Redgate Monitor equivalent or are recommended for retirement. This section documents the operational impact so your team can make an informed decision about each gap.</p>
+        <table class="gap-table">
+          <thead><tr><th>Condition</th><th>Why it can't migrate</th><th>Operational impact &amp; alternatives</th></tr></thead>
+          <tbody>${incResolved.filter(({r})=>r.match==='none'||r.match==='retire').map(({a,r})=>{
+            const impact = r.match==='retire'
+              ? `Low impact — Redgate Monitor's model makes this unnecessary. ${r.note}`
+              : `Monitoring gap — ${r.note}`;
+            const altRow = r.match==='none'
+              ? `<span class="rpt-surf-note" style="display:inline-block;margin-top:4px">${r.rgType}</span>`
+              : `<span class="rpt-surf-good" style="display:inline-block;margin-top:4px">Retire intentionally — reduces alert fatigue</span>`;
+            return `<tr>
+              <td><strong>${esc(a.alertName)}</strong><br><span style="font-size:10px;color:var(--text3)">${r.match==='retire'?'Recommended to retire':'No equivalent'}</span></td>
+              <td style="font-size:11px">${esc(r.match==='retire'?'RG monitoring model makes this unnecessary':'No T-SQL/RG equivalent')}</td>
+              <td style="font-size:11px">${esc(impact)}<br>${altRow}</td>
+            </tr>`;
+          }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>` : ''}
+
+    <div class="report-section">
+      <div class="rpt-compare-toggle" onclick="toggleRptCompare(this)" style="margin-bottom:0">
+        <span>&#9881;</span>
+        <span>Beyond alerts — full monitoring migration surfaces</span>
+        <span class="rct-chevron">&#9660;</span>
+      </div>
+      <div class="rpt-compare-body">
+        <p style="font-size:12px;color:var(--text2);margin:0 0 12px">Alerts are one piece. A complete migration also covers baselines, instance inventory, notification routing, and the reports your team relies on.</p>
+        <div class="rpt-surfaces-grid">
+          <div class="rpt-surf-card">
+            <div class="rpt-surf-title"><span class="rpt-surf-icon">&#9642;</span>Server &amp; instance inventory</div>
+            <div class="rpt-surf-step"><span class="rpt-ss-num">1</span><span>Export your monitored server list from ${srcLabel === 'SQL Sentry' ? 'SQL Sentry Management Studio → Monitored SQL Server Objects' : srcLabel === 'SolarWinds DPA' ? 'DPA Admin → Monitored Databases' : srcLabel === 'IDERA SQL Diagnostic Manager' ? 'IDERA SQLDM → Managed Instances' : 'Quest Spotlight → Monitored Connections'}.</span></div>
+            <div class="rpt-surf-step"><span class="rpt-ss-num">2</span><span>In Redgate Monitor: Configuration → Monitored servers → Add. Use the same instance name format as in your SQL Server connection strings (e.g. <code>SERVERNAME</code> or <code>SERVERNAME\INSTANCE</code>).</span></div>
+            <div class="rpt-surf-step"><span class="rpt-ss-num">3</span><span>Verify each instance appears in the Redgate Monitor Overview within 5 minutes of adding. Check for agent connectivity errors under Configuration → Monitored servers → Status.</span></div>
+            <span class="rpt-surf-note">Instance names in ${srcLabel} must match exactly how they appear in Redgate Monitor — including case for named instances.</span>
+          </div>
+          <div class="rpt-surf-card">
+            <div class="rpt-surf-title"><span class="rpt-surf-icon">&#9651;</span>Performance baselines &amp; thresholds</div>
+            <div class="rpt-surf-step"><span class="rpt-ss-num">1</span><span>Export baseline reports from ${srcLabel === 'SQL Sentry' ? 'SQL Sentry → Reports → Performance Baselines' : srcLabel === 'SolarWinds DPA' ? 'DPA → Response Time Baseline report' : srcLabel === 'IDERA SQL Diagnostic Manager' ? 'IDERA → Baseline Configuration' : 'Quest Spotlight → Baseline Configuration'}. Note typical CPU %, memory available, disk latency, wait time per instance.</span></div>
+            <div class="rpt-surf-step"><span class="rpt-ss-num">2</span><span>Use these baselines to set thresholds in Redgate Monitor: Alert settings → select alert type → set Low/Medium/High thresholds per instance.</span></div>
+            <div class="rpt-surf-step"><span class="rpt-ss-num">3</span><span>For Dynamic Alerts (ML-based), Redgate Monitor learns baselines automatically — no threshold needed. Allow 1–2 weeks of observation before tuning sensitivity.</span></div>
+            <span class="rpt-surf-good">Dynamic Alerts require no baseline configuration — Redgate Monitor's ML trains automatically on live data.</span>
+          </div>
+          <div class="rpt-surf-card">
+            <div class="rpt-surf-title"><span class="rpt-surf-icon">&#9993;</span>Notification routing</div>
+            <div class="rpt-surf-step"><span class="rpt-ss-num">1</span><span>Review the notification groups you mapped in Step 2 of the converter. Each group must become a Redgate Monitor Notification Profile.</span></div>
+            <div class="rpt-surf-step"><span class="rpt-ss-num">2</span><span>In Redgate Monitor: Configuration → Notification profiles → Add profile. Configure email addresses, Slack channels, PagerDuty keys, or webhooks.</span></div>
+            <div class="rpt-surf-step"><span class="rpt-ss-num">3</span><span>Assign each profile to the relevant alert types: Alert settings → select alert → Notification → assign profile. Redgate Monitor v14 supports Email, Slack, Teams, PagerDuty, OpsGenie, and webhooks.</span></div>
+            ${notifGroups.filter(g=>g.ssGroup).length === 0 ? `<span class="rpt-surf-note">No notification groups mapped yet — go back to Step 2 to add them.</span>` : `<span class="rpt-surf-good">${notifGroups.filter(g=>g.ssGroup).length} notification group${notifGroups.filter(g=>g.ssGroup).length!==1?'s':''} mapped in Step 2.</span>`}
+          </div>
+          <div class="rpt-surf-card">
+            <div class="rpt-surf-title"><span class="rpt-surf-icon">&#9783;</span>Reports &amp; dashboards</div>
+            <div class="rpt-surf-step"><span class="rpt-ss-num">1</span><span>List the ${srcLabel} reports your team reviews regularly (weekly performance review, backup compliance, blocking history). Each needs a Redgate Monitor equivalent.</span></div>
+            <div class="rpt-surf-step"><span class="rpt-ss-num">2</span><span>Redgate Monitor equivalents: Overview dashboard (health at a glance), Query Monitor (top queries &amp; plans), Top Waits (wait analysis), Blocked Processes (blocking history), Alert History (compliance/audit).</span></div>
+            <div class="rpt-surf-step"><span class="rpt-ss-num">3</span><span>For scheduled reports: Redgate Monitor supports PDF/email reports via Configuration → Reports. Set up weekly summaries for stakeholders who previously received ${srcLabel} report emails.</span></div>
+            <span class="rpt-surf-note">Redgate Monitor doesn't have a "backup compliance report" built in — use Alert History filtered by Backup overdue alert type as a substitute.</span>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <div class="report-section">
       <div class="report-section-title">Complete mapping table</div>
