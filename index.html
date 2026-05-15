@@ -820,14 +820,6 @@
     .report-close, .report-print-btn { display: none !important; }
   }
 
-  /* ── Print: migration checklist only ── */
-  @media print {
-    body.printing-checklist * { visibility: hidden !important; }
-    body.printing-checklist .migration-checklist-section,
-    body.printing-checklist .migration-checklist-section * { visibility: visible !important; }
-    body.printing-checklist .migration-checklist-section { position: fixed; top: 0; left: 0; width: 100%; }
-    body.printing-checklist .mc-print-btn { display: none !important; }
-  }
 </style>
 </head>
 <body>
@@ -4421,7 +4413,7 @@ buildPreview = function() {
   var fi = document.getElementById('alertFilter');
   if (fi) fi.value = '';
   _origBuildPreview();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  window.scrollTo(0, 0);
 };
 
 // ── Session save/restore (localStorage) ───────────────────────────────────
@@ -4534,9 +4526,32 @@ function buildMigrationChecklist() {
 }
 
 function printChecklist() {
-  document.body.classList.add('printing-checklist');
-  window.print();
-  document.body.classList.remove('printing-checklist');
+  var container = document.getElementById('migrationChecklistContainer');
+  if (!container) return;
+  var w = window.open('', '_blank', 'width=700,height=900');
+  w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Migration Checklist</title><style>' +
+    'body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:14px;color:#111;padding:2rem;max-width:700px;margin:0 auto}' +
+    'h2{font-size:18px;font-weight:700;margin-bottom:4px}' +
+    'p.sub{font-size:12px;color:#666;margin-bottom:1.5rem}' +
+    '.mc-item{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid #e5e5e5}' +
+    '.mc-item:last-child{border-bottom:none}' +
+    'input[type=checkbox]{width:15px;height:15px;flex-shrink:0;margin-top:2px}' +
+    'label{flex:1;font-size:13px}' +
+    '.mc-note{font-size:11px;color:#888;margin-top:2px}' +
+    '@media print{body{padding:1rem}}' +
+    '</style></head><body>' +
+    '<h2>Migration Checklist — Custom Metrics</h2>' +
+    '<p class="sub">The following alerts require a custom metric to be created in Redgate Monitor before they can be migrated.</p>' +
+    container.querySelectorAll('.mc-item').length === 0 ? '<p>No custom metric items.</p>' :
+    Array.from(container.querySelectorAll('.mc-item')).map(function(el, i) {
+      var name = el.querySelector('label strong') ? el.querySelector('label strong').textContent : '';
+      return '<div class="mc-item"><input type="checkbox" id="p'+i+'"><label for="p'+i+'"><strong>' + name + '</strong>' +
+        '<div class="mc-note">Custom metric setup required — Configuration → Custom metrics and alerts → Add custom metric</div></label></div>';
+    }).join('') +
+    '</body></html>');
+  w.document.close();
+  w.focus();
+  setTimeout(function() { w.print(); }, 300);
 }
 
 // Patch buildOutputs to also render checklist
