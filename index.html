@@ -4542,12 +4542,17 @@ function printChecklist() {
     '</style></head><body>' +
     '<h2>Migration Checklist — Custom Metrics</h2>' +
     '<p class="sub">The following alerts require a custom metric to be created in Redgate Monitor before they can be migrated.</p>' +
-    container.querySelectorAll('.mc-item').length === 0 ? '<p>No custom metric items.</p>' :
-    Array.from(container.querySelectorAll('.mc-item')).map(function(el, i) {
-      var name = el.querySelector('label strong') ? el.querySelector('label strong').textContent : '';
-      return '<div class="mc-item"><input type="checkbox" id="p'+i+'"><label for="p'+i+'"><strong>' + name + '</strong>' +
-        '<div class="mc-note">Custom metric setup required — Configuration → Custom metrics and alerts → Add custom metric</div></label></div>';
-    }).join('') +
+    (function() {
+      var checked = Array.from(container.querySelectorAll('.mc-item')).filter(function(el) {
+        return el.querySelector('input[type=checkbox]') && el.querySelector('input[type=checkbox]').checked;
+      });
+      if (!checked.length) return '<p style="color:#888">No items checked. Check items in the checklist first, then print.</p>';
+      return checked.map(function(el, i) {
+        var name = el.querySelector('label strong') ? el.querySelector('label strong').textContent : '';
+        return '<div class="mc-item"><input type="checkbox" checked id="p'+i+'"><label for="p'+i+'"><strong>' + name + '</strong>' +
+          '<div class="mc-note">Custom metric setup required — Configuration → Custom metrics and alerts → Add custom metric</div></label></div>';
+      }).join('');
+    })() +
     '</body></html>');
   w.document.close();
   w.focus();
