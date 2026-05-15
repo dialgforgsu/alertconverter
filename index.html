@@ -375,7 +375,7 @@
     max-height: 380px; color: var(--text); line-height: 1.6;
   }
 
-  /* ── Info / warn boxes ── */
+  /* ── Info / warn / error boxes ── */
   .info-box {
     background: var(--blue-bg); border: 0.5px solid var(--blue-border);
     border-radius: var(--radius); padding: 10px 14px;
@@ -386,7 +386,72 @@
     border-radius: var(--radius); padding: 10px 14px;
     font-size: 12px; color: var(--amber-text); margin-bottom: 12px; line-height: 1.6;
   }
+  .error-box {
+    background: var(--red-bg); border: 0.5px solid var(--red-border);
+    border-radius: var(--radius); padding: 10px 14px;
+    font-size: 12px; color: var(--red-text); margin-bottom: 12px; line-height: 1.6;
+  }
   .note-pill { font-size: 10px; padding: 2px 7px; border-radius: 5px; background: var(--red-bg); color: var(--red-text); border: 0.5px solid var(--red-border); }
+
+  /* ── Privacy notice pill ── */
+  .privacy-pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11px; padding: 4px 10px;
+    background: var(--green-bg); color: var(--green-text);
+    border: 0.5px solid var(--green-border);
+    border-radius: 20px; margin-top: 8px;
+    font-weight: 500; white-space: nowrap;
+  }
+
+  /* ── Session banner ── */
+  .session-banner {
+    background: var(--amber-bg); border: 0.5px solid var(--amber-border);
+    border-radius: var(--radius); padding: 10px 14px;
+    font-size: 12px; color: var(--amber-text); margin-bottom: 12px;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  }
+  .session-banner-text { flex: 1; min-width: 0; }
+  .session-banner .btn { font-size: 11px; padding: 4px 10px; }
+
+  /* ── Alert filter search ── */
+  .alert-filter-row {
+    display: flex; align-items: center; gap: 6px; margin-bottom: 12px;
+    position: relative;
+  }
+  .alert-filter-row input[type=text] {
+    flex: 1; margin-bottom: 0; padding-right: 30px;
+  }
+  .alert-filter-clear {
+    position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+    background: none; border: none; cursor: pointer;
+    font-size: 14px; color: var(--text3); padding: 2px 4px; line-height: 1;
+  }
+  .alert-filter-clear:hover { color: var(--text2); }
+
+  /* ── Migration checklist print section ── */
+  .migration-checklist-section {
+    margin-top: 1.5rem;
+  }
+  .migration-checklist-section h3 {
+    font-size: 15px; font-weight: 600; margin-bottom: 10px;
+  }
+  .mc-item {
+    display: flex; gap: 10px; align-items: flex-start;
+    padding: 8px 0; border-bottom: 0.5px solid var(--border);
+    font-size: 13px;
+  }
+  .mc-item:last-child { border-bottom: none; }
+  .mc-checkbox { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+  .mc-note { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+  @media (max-width: 640px) {
+    .drop-zone-mobile-label { display: block !important; }
+  }
+  .drop-zone-mobile-label {
+    display: none;
+    font-size: 12px; color: var(--blue-text); font-weight: 600;
+    margin-top: 6px;
+  }
 
   /* ── How-to footer card ── */
   .howto { background: var(--bg2); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 14px; margin-top: 1rem; }
@@ -754,6 +819,14 @@
     #summaryOverlay { position: static; overflow: visible; }
     .report-close, .report-print-btn { display: none !important; }
   }
+
+  /* ── Print: migration checklist only ── */
+  @media print {
+    body.printing-checklist * { display: none !important; }
+    body.printing-checklist .migration-checklist-section,
+    body.printing-checklist .migration-checklist-section * { display: revert !important; }
+    body.printing-checklist .mc-print-btn { display: none !important; }
+  }
 </style>
 </head>
 <body>
@@ -775,9 +848,14 @@
 </nav>
 
 <div class="page">
+  <div id="sessionBanner" class="hidden"></div>
   <div class="hero">
     <h1 id="heroTitle">SQL Sentry → Redgate Monitor</h1>
     <p id="heroDesc">Convert SolarWinds SQL Sentry alert exports into Redgate Monitor–ready PowerShell scripts, webhook JSON, or SQL — with full SQL Sentry alert type mapping applied automatically.</p>
+    <span class="privacy-pill">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      All processing happens in your browser — no data is sent to any server.
+    </span>
   </div>
 
   <!-- Source selector -->
@@ -792,17 +870,17 @@
   </div>
 
   <!-- Stepper -->
-  <div class="stepper">
-    <button class="step-btn active" id="sBtn0" onclick="switchTab(0)">
+  <div class="stepper" role="tablist" aria-label="Converter steps">
+    <button class="step-btn active" id="sBtn0" onclick="switchTab(0)" role="tab" aria-label="Step 1: Upload" aria-current="step">
       <span class="step-num-circle">1</span>Import
     </button>
-    <button class="step-btn" id="sBtn1" onclick="switchTab(1)">
+    <button class="step-btn" id="sBtn1" onclick="switchTab(1)" role="tab" aria-label="Step 2: Map fields">
       <span class="step-num-circle">2</span>Map fields
     </button>
-    <button class="step-btn" id="sBtn2" onclick="switchTab(2)">
+    <button class="step-btn" id="sBtn2" onclick="switchTab(2)" role="tab" aria-label="Step 3: Preview">
       <span class="step-num-circle">3</span>Preview
     </button>
-    <button class="step-btn" id="sBtn3" onclick="switchTab(3)">
+    <button class="step-btn" id="sBtn3" onclick="switchTab(3)" role="tab" aria-label="Step 4: Export">
       <span class="step-num-circle">4</span>Export
     </button>
   </div>
@@ -811,12 +889,14 @@
   <div id="tab0">
     <div class="card">
       <div class="section-title" id="importCardTitle">Import DPA alert export</div>
-      <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileIn').click()">
+      <div class="drop-zone" id="dropZone" role="button" tabindex="0" aria-label="Upload alert export file — click or drag and drop" onclick="document.getElementById('fileIn').click()">
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
         <span id="dropLabel">Drop a DPA CSV or ZIP here, or click to browse</span>
         <br><span style="font-size:11px;opacity:.7">Supports .csv, .txt, .zip, and .condition files (multiple allowed)</span>
+        <span class="drop-zone-mobile-label">Tap to browse files</span>
         <input type="file" id="fileIn" accept=".csv,.txt,.zip,.condition" style="display:none" multiple onchange="handleFile(event)">
       </div>
+      <div id="fileErrorArea"></div>
       <label>Or paste CSV data directly (header row required):</label>
       <textarea id="rawPaste" rows="7" id="rawPaste" placeholder="AlertName,Severity,DatabaseInstance,StartTime,AlertType,Message,Threshold,CurrentValue&#10;High CPU Wait,High,PROD-SQL-01,2026-04-01 08:12:00,Resources,CPU wait exceeded threshold,80,94,Ended..."></textarea>
       <div class="btn-group">
@@ -917,6 +997,10 @@
 
   <!-- ── TAB 1: MAP ── -->
   <div id="tab1" class="hidden">
+    <div class="btn-group" id="sessionBtnGroup" style="margin-bottom:0.75rem">
+      <button class="btn btn-sm" onclick="saveSession()">&#128190; Save session</button>
+      <button class="btn btn-sm" onclick="clearSession()">&#10005; Clear session</button>
+    </div>
     <div class="card hidden" id="zipSummary">
       <div class="section-title">ZIP import summary</div>
       <div id="zipSummaryBody"></div>
@@ -961,6 +1045,10 @@
       <div class="print-header" id="printHeader"></div>
       <div class="section-title">Mapped alerts</div>
       <p style="font-size:12px;color:var(--text2);margin-bottom:12px" id="previewSubtitle">Each alert type has been matched to its Redgate Monitor equivalent. Uncheck any alerts to exclude from the export.</p>
+      <div class="alert-filter-row">
+        <input type="text" id="alertFilter" placeholder="Filter alerts by name…" oninput="applyAlertFilter()" style="margin-bottom:0">
+        <button class="alert-filter-clear" id="alertFilterClear" onclick="clearAlertFilter()" title="Clear filter" aria-label="Clear filter">&#215;</button>
+      </div>
       <div class="sort-bar">
         <span class="sort-bar-label">Sort by:</span>
         <button class="sort-btn" id="sb-name"      onclick="setSort('alertName')">Name</button>
@@ -1003,6 +1091,7 @@
         5. Alerts marked <strong>[CUSTOM METRIC REQUIRED]</strong> need a custom metric built first under <strong>Configuration → Custom metrics and alerts</strong>.
       </p>
     </div>
+    <div id="migrationChecklistContainer"></div>
   </div>
 
   <footer>
@@ -2789,6 +2878,7 @@ function ${fnName} {
                 }
             } else {
                 \\$Stats.WhatIf++
+                Write-Host "[DRY RUN] Would create alert: '$($Alert.AlertName)' on \\$InstName [$($Alert.RgAlertType)] [$($Alert.MatchType)]" -ForegroundColor Yellow
             }
         }
 
@@ -3346,6 +3436,7 @@ function renderAlertList(mapped) {
             <span class="alert-card-name">${esc(a.alertName||'(unnamed)')}</span>
             <span class="badge ${sevClass}">${esc(a.severity||'—')}</span>
             <span class="conf-pill ${conf.cls}" title="${esc(conf.desc)}"><span class="conf-dot"></span>${conf.label}</span>
+            <span style="font-size:10px;color:var(--text3)" title="Confidence score">(${getConfidencePct(r)})</span>
           </div>
           <div class="alert-card-meta">${esc(a.instance||'—')} &middot; ${esc(a.startTime||'definition only')}</div>
           <div class="alert-card-mapping">
@@ -4155,6 +4246,319 @@ function pq(s)     { return `'${(s||'').replace(/'/g,"''")}'`; }
 function sq(s)     { return s ? `N'${(s||'').replace(/'/g,"''")}'` : 'NULL'; }
 function sqdt(s)   { return s && s.trim() ? `'${s.trim()}'` : 'NULL'; }
 function toISO(s)  { try { return new Date(s).toISOString(); } catch { return s; } }
+
+// ── Drop zone keyboard (Enter/Space) ──────────────────────────────────────
+(function() {
+  var dz2 = document.getElementById('dropZone');
+  if (dz2) {
+    dz2.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        document.getElementById('fileIn').click();
+      }
+    });
+  }
+})();
+
+// ── Stepper ARIA current-step updater ─────────────────────────────────────
+var _origSwitchTab = switchTab;
+switchTab = function(n) {
+  _origSwitchTab(n);
+  [0,1,2,3].forEach(function(i) {
+    var btn = document.getElementById('sBtn'+i);
+    if (btn) {
+      if (i === n) btn.setAttribute('aria-current','step');
+      else btn.removeAttribute('aria-current');
+    }
+  });
+};
+
+// ── Error display helpers ──────────────────────────────────────────────────
+function showFileError(msg) {
+  var el = document.getElementById('fileErrorArea');
+  if (!el) return;
+  el.innerHTML = '<div class="error-box" style="margin-top:8px"><strong>Error:</strong> ' + msg + '</div>';
+}
+function clearFileError() {
+  var el = document.getElementById('fileErrorArea');
+  if (el) el.innerHTML = '';
+}
+
+// ── Improved CSV parseCSV (replaces original) ─────────────────────────────
+// Override the original parseCSV with error-friendly version
+(function() {
+  var _realParseCSV = parseCSV;
+  parseCSV = function() {
+    clearFileError();
+    var raw = document.getElementById('rawPaste').value.trim();
+    if (!raw) {
+      showFileError('No data to parse. Paste CSV content or drop a file.');
+      return;
+    }
+    var lines = raw.split('\n').filter(function(l){ return l.trim(); });
+
+    // JSON .condition passthrough
+    if (/^\s*\{/.test(lines[0]) && lines[0].includes('"Name"')) {
+      var record = parseConditionJSON(raw, 0);
+      if (record) {
+        clearFileError();
+        finalizeConditionImport([record], [{name: 'pasted condition', fmt: 'ss-condition', count: 1}]);
+        return;
+      }
+    }
+
+    if (lines.length < 2) {
+      showFileError('The file was read successfully but no alerts were found. Make sure you\'re exporting the Alerts view, not the Alert History or Events view.');
+      return;
+    }
+
+    document.getElementById('conditionsNotice').classList.add('hidden');
+    document.getElementById('zipSummary').classList.add('hidden');
+    colHeaders = splitCSV(lines[0]);
+    alerts = lines.slice(1).map(function(l, i) {
+      var vals = splitCSV(l), obj = {_id: i, _excluded: false};
+      colHeaders.forEach(function(h, j) { obj[h] = (vals[j] || '').trim(); });
+      return obj;
+    });
+
+    if (!alerts.length) {
+      showFileError('The file was read successfully but no alerts were found. Make sure you\'re exporting the Alerts view, not the Alert History or Events view.');
+      return;
+    }
+
+    buildMappingUI();
+    switchTab(1);
+  };
+})();
+
+// ── Improved handleZip with friendly error messages ────────────────────────
+(function() {
+  var _origHandleZip = handleZip;
+  handleZip = async function(f) {
+    clearFileError();
+    var zip;
+    try { zip = await JSZip.loadAsync(f); }
+    catch(e) {
+      showFileError('Could not read ZIP file: ' + esc(e.message));
+      return;
+    }
+
+    var allEntries = Object.values(zip.files).filter(function(e){ return !e.dir; });
+    var entries = allEntries.filter(function(e){ return /\.(csv|txt|condition|json)$/i.test(e.name); });
+    if (!entries.length) {
+      var names = allEntries.slice(0,5).map(function(e){ return esc(e.name.split('/').pop()); }).join(', ');
+      showFileError('We found files in this ZIP (' + names + (allEntries.length > 5 ? ', …' : '') + ') but couldn\'t find a recognized alert export. Expected a file like <code>alerts.csv</code> or <code>AlertConfiguration.xml</code>.');
+      return;
+    }
+
+    var allAlerts = [], summary = [];
+    var idOffset = 0;
+
+    for (var entry of entries) {
+      var text = (await entry.async('string')).replace(/^﻿/, '');
+      var fname = entry.name.split('/').pop();
+      var rows, fmt;
+      if (fname.toLowerCase().endsWith('.condition')) {
+        var record = parseConditionJSON(text, idOffset);
+        rows = record ? [record] : [];
+        fmt = 'ss-condition';
+      } else if (fname.toLowerCase().endsWith('.json')) {
+        var parsed;
+        try { parsed = JSON.parse(text); } catch(ex) { rows = []; fmt = 'unknown'; }
+        if (parsed && (parsed.alerts || parsed.headers)) {
+          rows = parseDPAJson(parsed, idOffset);
+          fmt = 'dpa-json';
+        } else {
+          rows = [];
+          fmt = 'unknown';
+        }
+      } else {
+        fmt = detectFormat(text);
+        rows = normalizeCSVText(text, fmt, idOffset);
+      }
+      if (rows.length > 0) summary.push({ name: fname, fmt: fmt, count: rows.length });
+      allAlerts.push(...rows);
+      idOffset += rows.length;
+    }
+
+    if (!allAlerts.length) {
+      showFileError('The file was read successfully but no alerts were found. Make sure you\'re exporting the Alerts view, not the Alert History or Events view.');
+      return;
+    }
+    finalizeConditionImport(allAlerts, summary);
+  };
+})();
+
+// ── Alert filter (search in Preview tab) ──────────────────────────────────
+var _alertFilterText = '';
+
+function applyAlertFilter() {
+  _alertFilterText = (document.getElementById('alertFilter').value || '').toLowerCase();
+  var mapped = getMapped();
+  var filtered = _alertFilterText
+    ? mapped.filter(function(a){ return (a.alertName || '').toLowerCase().includes(_alertFilterText); })
+    : mapped;
+  renderAlertList(filtered);
+}
+
+function clearAlertFilter() {
+  document.getElementById('alertFilter').value = '';
+  _alertFilterText = '';
+  renderAlertList(getMapped());
+}
+
+// Patch buildPreview to reset filter
+var _origBuildPreview = buildPreview;
+buildPreview = function() {
+  _alertFilterText = '';
+  var fi = document.getElementById('alertFilter');
+  if (fi) fi.value = '';
+  _origBuildPreview();
+};
+
+// ── Session save/restore (localStorage) ───────────────────────────────────
+var SESSION_KEY = 'alertconverter_session';
+
+function saveSession() {
+  try {
+    var state = {
+      alerts: alerts,
+      colHeaders: colHeaders,
+      mappings: mappings,
+      sourceMode: sourceMode,
+      notifGroups: notifGroups,
+      cmDefs: cmDefs,
+      savedAt: new Date().toISOString()
+    };
+    localStorage.setItem(SESSION_KEY, JSON.stringify(state));
+    var btn = event.target;
+    var orig = btn.textContent;
+    btn.textContent = '✓ Saved!';
+    setTimeout(function(){ btn.textContent = orig; }, 1800);
+  } catch(e) {
+    alert('Could not save session: ' + e.message);
+  }
+}
+
+function clearSession() {
+  localStorage.removeItem(SESSION_KEY);
+  var banner = document.getElementById('sessionBanner');
+  if (banner) banner.classList.add('hidden');
+  var btn = event.target;
+  var orig = btn.textContent;
+  btn.textContent = '✓ Cleared';
+  setTimeout(function(){ btn.textContent = orig; }, 1800);
+}
+
+function restoreSession() {
+  try {
+    var raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return;
+    var state = JSON.parse(raw);
+    alerts      = state.alerts      || [];
+    colHeaders  = state.colHeaders  || [];
+    mappings    = state.mappings    || {};
+    sourceMode  = state.sourceMode  || 'sqlsentry';
+    notifGroups = state.notifGroups || [];
+    cmDefs      = state.cmDefs      || {};
+    setSource(sourceMode);
+    buildMappingUI();
+    renderNotifGroups();
+    document.getElementById('sessionBanner').classList.add('hidden');
+    switchTab(1);
+  } catch(e) {
+    alert('Could not restore session: ' + e.message);
+  }
+}
+
+function dismissSession() {
+  localStorage.removeItem(SESSION_KEY);
+  document.getElementById('sessionBanner').classList.add('hidden');
+}
+
+// Check for saved session on page load
+(function checkSavedSession() {
+  try {
+    var raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return;
+    var state = JSON.parse(raw);
+    if (!state || !state.savedAt) return;
+    var date = new Date(state.savedAt).toLocaleString();
+    var banner = document.getElementById('sessionBanner');
+    if (!banner) return;
+    banner.innerHTML =
+      '<span class="session-banner-text">&#128190; You have a saved session from <strong>' + esc(date) + '</strong>.</span>' +
+      '<button class="btn btn-sm btn-primary" onclick="restoreSession()">Restore</button>' +
+      '<button class="btn btn-sm" onclick="dismissSession()">Dismiss</button>';
+    banner.classList.remove('hidden');
+  } catch(e) {}
+})();
+
+// ── Migration checklist (tab 3 — custom metric items) ─────────────────────
+function buildMigrationChecklist() {
+  var mapped = getMapped();
+  var inc = mapped.filter(function(a){ return !a._excluded; });
+  var resolved = inc.map(function(a){ return { a: a, r: resolveRgType(a.alertType, a.alertName, a.message) }; });
+  var customItems = resolved.filter(function(x){ return x.r.match === 'custom'; });
+
+  if (!customItems.length) {
+    document.getElementById('migrationChecklistContainer').innerHTML = '';
+    return;
+  }
+
+  var items = customItems.map(function(x) {
+    return '<div class="mc-item">' +
+      '<span class="mc-checkbox">&#9744;</span>' +
+      '<div><div><strong>' + esc(x.a.alertName || '(unnamed)') + '</strong></div>' +
+      '<div class="mc-note">Custom metric setup required — Configuration &rarr; Custom metrics and alerts &rarr; Add custom metric</div>' +
+      '</div></div>';
+  }).join('');
+
+  document.getElementById('migrationChecklistContainer').innerHTML =
+    '<div class="card migration-checklist-section">' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">' +
+    '<div class="section-title" style="margin-bottom:0">Migration Checklist — Custom Metrics (' + customItems.length + ')</div>' +
+    '<button class="btn btn-sm mc-print-btn" onclick="printChecklist()">&#128438; Print Checklist</button>' +
+    '</div>' +
+    '<p style="font-size:12px;color:var(--text2);margin-bottom:12px">The following alerts require a custom metric to be created in Redgate Monitor before they can be migrated.</p>' +
+    items + '</div>';
+}
+
+function printChecklist() {
+  document.body.classList.add('printing-checklist');
+  window.print();
+  document.body.classList.remove('printing-checklist');
+}
+
+// Patch buildOutputs to also render checklist
+var _origBuildOutputs = buildOutputs;
+buildOutputs = function() {
+  _origBuildOutputs();
+  buildMigrationChecklist();
+};
+
+// ── Confidence percentage helper ───────────────────────────────────────────
+function getConfidencePct(r) {
+  switch (r.match) {
+    case 'direct': return '100%';
+    case 'partial': {
+      var note = (r.note || '').toLowerCase();
+      var hasSql = !!extractSQLFromNote(r.note);
+      var score = 70;
+      if (note.includes('maps to') || note.includes('maps directly')) score += 10;
+      if (note.includes('behavior differs') || note.includes('detection method')) score -= 10;
+      if (note.includes('no direct') || note.includes('cannot')) score -= 10;
+      if (note.includes('supplement') || note.includes('approximate')) score -= 5;
+      if (hasSql) score += 5;
+      score = Math.min(95, Math.max(45, score));
+      return score + '%';
+    }
+    case 'custom':  return '—';
+    case 'none':    return 'N/A';
+    case 'retire':  return 'N/A';
+    default:        return '—';
+  }
+}
 </script>
 </body>
 </html>
