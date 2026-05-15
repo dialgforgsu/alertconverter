@@ -822,9 +822,10 @@
 
   /* ── Print: migration checklist only ── */
   @media print {
-    body.printing-checklist * { display: none !important; }
+    body.printing-checklist * { visibility: hidden !important; }
     body.printing-checklist .migration-checklist-section,
-    body.printing-checklist .migration-checklist-section * { display: revert !important; }
+    body.printing-checklist .migration-checklist-section * { visibility: visible !important; }
+    body.printing-checklist .migration-checklist-section { position: fixed; top: 0; left: 0; width: 100%; }
     body.printing-checklist .mc-print-btn { display: none !important; }
   }
 </style>
@@ -1043,7 +1044,13 @@
     <div class="stats-grid-match" id="statsBarMatch"></div>
     <div class="card" id="alertListCard">
       <div class="print-header" id="printHeader"></div>
-      <div class="section-title">Mapped alerts</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+        <div class="section-title" style="margin-bottom:0">Mapped alerts</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" onclick="switchTab(3);buildOutputs()">Generate outputs →</button>
+          <button class="btn btn-sm" onclick="showSummaryReport()">&#128196; Export migration report</button>
+        </div>
+      </div>
       <p style="font-size:12px;color:var(--text2);margin-bottom:12px" id="previewSubtitle">Each alert type has been matched to its Redgate Monitor equivalent. Uncheck any alerts to exclude from the export.</p>
       <div class="alert-filter-row">
         <input type="text" id="alertFilter" placeholder="Filter alerts by name…" oninput="applyAlertFilter()" style="margin-bottom:0">
@@ -4407,13 +4414,14 @@ function clearAlertFilter() {
   renderAlertList(getMapped());
 }
 
-// Patch buildPreview to reset filter
+// Patch buildPreview to reset filter and scroll to top
 var _origBuildPreview = buildPreview;
 buildPreview = function() {
   _alertFilterText = '';
   var fi = document.getElementById('alertFilter');
   if (fi) fi.value = '';
   _origBuildPreview();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 
 // ── Session save/restore (localStorage) ───────────────────────────────────
@@ -4506,12 +4514,13 @@ function buildMigrationChecklist() {
     return;
   }
 
-  var items = customItems.map(function(x) {
+  var items = customItems.map(function(x, i) {
+    var id = 'mc-cb-' + i;
     return '<div class="mc-item">' +
-      '<span class="mc-checkbox">&#9744;</span>' +
-      '<div><div><strong>' + esc(x.a.alertName || '(unnamed)') + '</strong></div>' +
+      '<input type="checkbox" id="' + id + '" class="mc-checkbox" style="width:15px;height:15px;flex-shrink:0;margin-top:2px;cursor:pointer">' +
+      '<label for="' + id + '" style="cursor:pointer;flex:1"><div><strong>' + esc(x.a.alertName || '(unnamed)') + '</strong></div>' +
       '<div class="mc-note">Custom metric setup required — Configuration &rarr; Custom metrics and alerts &rarr; Add custom metric</div>' +
-      '</div></div>';
+      '</label></div>';
   }).join('');
 
   document.getElementById('migrationChecklistContainer').innerHTML =
