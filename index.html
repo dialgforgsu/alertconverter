@@ -3552,8 +3552,9 @@ function showSummaryReport() {
   const mapped = getMapped();
   if (!mapped.length) { alert('No alerts loaded — import and preview first.'); return; }
 
-  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'dpa' ? 'SolarWinds DPA' : 'IDERA';
-  const srcGroupLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry group' : sourceMode === 'dpa' ? 'DPA notification target' : 'IDERA Alert Action';
+  const srcLabel      = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'dpa' ? 'SolarWinds DPA' : sourceMode === 'quest' ? 'Quest Spotlight' : 'IDERA SQL Diagnostic Manager';
+  const srcGroupLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry group' : sourceMode === 'dpa' ? 'DPA notification target' : sourceMode === 'quest' ? 'Quest alarm action' : 'IDERA Alert Action';
+  const fnName        = sourceMode === 'sqlsentry' ? 'Import-SSAlertsToRedgateMonitor' : sourceMode === 'dpa' ? 'Import-DPAAlertsToRedgateMonitor' : sourceMode === 'quest' ? 'Import-QuestAlertsToRedgateMonitor' : 'Import-IDERAlertsToRedgateMonitor';
   const inc = mapped.filter(a => !a._excluded);
 
   // Resolve each alert once and cache — avoids 5–7x repeated calls per alert below
