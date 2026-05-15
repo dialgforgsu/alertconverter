@@ -628,7 +628,12 @@
   .report-close { cursor: pointer; padding: 6px 14px; border: 0.5px solid var(--border2); border-radius: var(--radius); background: var(--bg2); font-size: 12px; color: var(--text2); }
   .report-close:hover { background: var(--bg3); }
   .report-section { margin-bottom: 1.5rem; }
-  .report-section-title { font-size: 14px; font-weight: 600; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 0.5px solid var(--border); }
+  .report-section-title { font-size: 14px; font-weight: 600; margin-bottom: 0; padding-bottom: 4px; border-bottom: 0.5px solid var(--border); cursor: pointer; user-select: none; display: flex; align-items: center; justify-content: space-between; }
+  .report-section-title:hover { color: var(--blue-mid); }
+  .report-section-title .rpt-sec-chevron { font-size: 11px; margin-left: 8px; flex-shrink: 0; transition: transform .2s; }
+  .report-section-title.collapsed .rpt-sec-chevron { transform: rotate(-90deg); }
+  .report-section-body { margin-top: 8px; }
+  .report-section-body.hidden { display: none; }
   .report-summary-box {
     background: var(--bg2); border-radius: var(--radius-lg);
     padding: 1rem 1.25rem;
@@ -642,6 +647,13 @@
   .gap-table th { text-align: left; padding: 6px 10px; background: var(--bg2); border-bottom: 1px solid var(--border); font-weight: 600; }
   .gap-table td { padding: 7px 10px; border-bottom: 0.5px solid var(--border); vertical-align: top; }
   .gap-table tr:last-child td { border-bottom: none; }
+  .gap-table th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+  .gap-table th.sortable:hover { background: var(--bg3); color: var(--blue-mid); }
+  .gap-table th .sort-ic { display: inline-block; margin-left: 3px; font-size: 9px; opacity: 0.45; }
+  .gap-table th.sort-asc .sort-ic, .gap-table th.sort-desc .sort-ic { opacity: 1; color: var(--blue-text); }
+  .gap-table th:not(.sort-asc):not(.sort-desc) .sort-ic::after { content: '⇅'; }
+  .gap-table th.sort-asc .sort-ic::after { content: '↑'; }
+  .gap-table th.sort-desc .sort-ic::after { content: '↓'; }
   .rpt-mapping-row { display: flex; align-items: center; gap: 6px; padding: 6px 0; border-bottom: 0.5px solid var(--border); font-size: 12px; flex-wrap: wrap; }
   .rpt-mapping-row:last-child { border-bottom: none; }
 
@@ -1053,8 +1065,10 @@
         <div class="report-title">Migration Report</div>
         <div class="report-subtitle" id="rptSubtitle"></div>
       </div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <button class="report-close report-print-btn btn btn-primary" onclick="window.print()">&#128438; Print / Save PDF</button>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button class="report-close report-print-btn" onclick="exportReportHTML()" title="Download a self-contained interactive HTML file">&#8595; HTML</button>
+        <button class="report-close report-print-btn" onclick="exportReportMD()" title="Download as Markdown — paste into docs, Notion, Confluence">&#8595; Markdown</button>
+        <button class="report-close report-print-btn btn btn-primary" onclick="window.print()">&#128438; Print / PDF</button>
         <button class="report-close" onclick="closeSummaryReport()">&#10005; Close</button>
       </div>
     </div>
@@ -3547,6 +3561,31 @@ function toggleRptCompare(el) {
   el.nextElementSibling.classList.toggle('hidden');
 }
 
+function toggleReportSection(el) {
+  el.classList.toggle('collapsed');
+  const body = el.nextElementSibling;
+  if (body) body.classList.toggle('hidden');
+}
+
+function sortMappingTable(colIdx, th) {
+  const table = th.closest('table');
+  const tbody = table.querySelector('tbody');
+  const rows  = Array.from(tbody.querySelectorAll('tr'));
+  const isAsc = !th.classList.contains('sort-asc');
+  table.querySelectorAll('th.sortable').forEach(h => h.classList.remove('sort-asc', 'sort-desc'));
+  th.classList.add(isAsc ? 'sort-asc' : 'sort-desc');
+  rows.sort((a, b) => {
+    const aC = a.cells[colIdx], bC = b.cells[colIdx];
+    const aHas = aC.dataset.sort !== undefined && aC.dataset.sort !== '';
+    const bHas = bC.dataset.sort !== undefined && bC.dataset.sort !== '';
+    const aV = aHas ? Number(aC.dataset.sort) : aC.textContent.trim().toLowerCase();
+    const bV = bHas ? Number(bC.dataset.sort) : bC.textContent.trim().toLowerCase();
+    if (typeof aV === 'number' && typeof bV === 'number') return isAsc ? aV - bV : bV - aV;
+    return isAsc ? String(aV).localeCompare(String(bV)) : String(bV).localeCompare(String(aV));
+  });
+  rows.forEach(r => tbody.appendChild(r));
+}
+
 // ── Summary / migration report ─────────────────────────────────────────────
 function showSummaryReport() {
   const mapped = getMapped();
@@ -3674,29 +3713,35 @@ Recommended order: (1) Activate direct replacements immediately. (2) Review beha
     }).join('');
 
   // All mappings table — already resolved above
+  const SEV_SORT   = { high: 0, medium: 1, low: 2 };
+  const MATCH_SORT = { direct: 0, partial: 1, custom: 2, none: 3, retire: 4 };
   const allRows = incResolved.map(({ a, r }) => {
     const sev = a.severity.toLowerCase();
     const sevCls = sev==='high'?'badge-high':sev==='medium'?'badge-med':'badge-low';
     const mCls = r.match==='direct'?'badge-direct':r.match==='partial'?'badge-partial':r.match==='none'?'badge-none':r.match==='retire'?'badge-retire':'badge-custom';
+    const sevSort   = SEV_SORT[sev]     ?? 3;
+    const matchSort = MATCH_SORT[r.match] ?? 5;
     return `<tr>
       <td>${esc(a.alertName||'—')}</td>
       <td>${esc(a.instance||'—')}</td>
-      <td><span class="badge ${sevCls}">${esc(a.severity)}</span></td>
+      <td data-sort="${sevSort}"><span class="badge ${sevCls}">${esc(a.severity)}</span></td>
       <td>${esc(a.alertType||'—')}</td>
       <td>${esc(r.rgType)}</td>
-      <td><span class="badge ${mCls}">${r.match}</span></td>
+      <td data-sort="${matchSort}"><span class="badge ${mCls}">${r.match}</span></td>
     </tr>`;
   }).join('');
 
   // Notification groups — use source-aware column header
   const notifSection = notifGroups.filter(g => g.ssGroup).length
     ? `<div class="report-section">
-        <div class="report-section-title">Notification group migration</div>
-        <table class="gap-table">
-          <thead><tr><th>${srcGroupLabel}</th><th>Redgate Monitor action</th><th>Target</th></tr></thead>
-          <tbody>${notifGroups.filter(g=>g.ssGroup).map(g=>`<tr><td>${esc(g.ssGroup)}</td><td>${esc(g.rgAction)}</td><td>${esc(g.rgTarget||'—')}</td></tr>`).join('')}</tbody>
-        </table>
-        <p style="font-size:11px;color:var(--text3);margin-top:6px">Configure notification profiles in Redgate Monitor under Configuration → Notification profiles, then assign to each alert type.</p>
+        <div class="report-section-title" onclick="toggleReportSection(this)">Notification group migration <span class="rpt-sec-chevron">&#9660;</span></div>
+        <div class="report-section-body">
+          <table class="gap-table">
+            <thead><tr><th>${srcGroupLabel}</th><th>Redgate Monitor action</th><th>Target</th></tr></thead>
+            <tbody>${notifGroups.filter(g=>g.ssGroup).map(g=>`<tr><td>${esc(g.ssGroup)}</td><td>${esc(g.rgAction)}</td><td>${esc(g.rgTarget||'—')}</td></tr>`).join('')}</tbody>
+          </table>
+          <p style="font-size:11px;color:var(--text3);margin-top:6px">Configure notification profiles in Redgate Monitor under Configuration → Notification profiles, then assign to each alert type.</p>
+        </div>
       </div>` : '';
 
   document.getElementById('rptSubtitle').textContent =
@@ -3704,8 +3749,10 @@ Recommended order: (1) Activate direct replacements immediately. (2) Review beha
 
   document.getElementById('rptBody').innerHTML = `
     <div class="report-section">
-      <div class="report-section-title">Executive summary</div>
-      <div class="report-summary-box">${summaryText.replace(/\n/g,'<br>')}</div>
+      <div class="report-section-title" onclick="toggleReportSection(this)">Executive summary <span class="rpt-sec-chevron">&#9660;</span></div>
+      <div class="report-section-body">
+        <div class="report-summary-box">${summaryText.replace(/\n/g,'<br>')}</div>
+      </div>
     </div>
 
     <div class="report-stats">
@@ -3724,26 +3771,32 @@ Recommended order: (1) Activate direct replacements immediately. (2) Review beha
     ${buildToolComparisonSection()}
 
     ${none > 0 ? `<div class="report-section">
-      <div class="report-section-title">Gap analysis — conditions not available in Redgate Monitor</div>
-      <table class="gap-table">
-        <thead><tr><th>Condition name</th><th>Category</th><th>Reason / alternative</th></tr></thead>
-        <tbody>${gapRows}</tbody>
-      </table>
+      <div class="report-section-title" onclick="toggleReportSection(this)">Gap analysis — conditions not available in Redgate Monitor <span class="rpt-sec-chevron">&#9660;</span></div>
+      <div class="report-section-body">
+        <table class="gap-table">
+          <thead><tr><th>Condition name</th><th>Category</th><th>Reason / alternative</th></tr></thead>
+          <tbody>${gapRows}</tbody>
+        </table>
+      </div>
     </div>` : ''}
 
     ${retire > 0 ? `<div class="report-section">
-      <div class="report-section-title">Recommended for retirement (${retire} conditions) — do not recreate</div>
-      <p style="font-size:12px;color:var(--text2);margin-bottom:10px">These SQL Sentry conditions should not be recreated in Redgate Monitor. Redgate Monitor's monitoring model makes them unnecessary, or they generate noise without actionable signal. Retiring them intentionally reduces alert fatigue.</p>
-      <table class="gap-table">
-        <thead><tr><th>Condition name</th><th>Reason to retire</th></tr></thead>
-        <tbody>${incResolved.filter(({r})=>r.match==='retire').map(({a,r})=>`<tr><td><strong>${esc(a.alertName)}</strong></td><td>${esc(r.note)}</td></tr>`).join('')}</tbody>
-      </table>
+      <div class="report-section-title" onclick="toggleReportSection(this)">Recommended for retirement (${retire} conditions) — do not recreate <span class="rpt-sec-chevron">&#9660;</span></div>
+      <div class="report-section-body">
+        <p style="font-size:12px;color:var(--text2);margin-bottom:10px">These conditions should not be recreated in Redgate Monitor. Redgate Monitor's monitoring model makes them unnecessary, or they generate noise without actionable signal. Retiring them intentionally reduces alert fatigue.</p>
+        <table class="gap-table">
+          <thead><tr><th>Condition name</th><th>Reason to retire</th></tr></thead>
+          <tbody>${incResolved.filter(({r})=>r.match==='retire').map(({a,r})=>`<tr><td><strong>${esc(a.alertName)}</strong></td><td>${esc(r.note)}</td></tr>`).join('')}</tbody>
+        </table>
+      </div>
     </div>` : ''}
 
     ${custom > 0 ? `<div class="report-section">
-      <div class="report-section-title">Custom metrics required (${custom} conditions)</div>
-      <p style="font-size:12px;color:var(--text2);margin-bottom:10px">Create these in Redgate Monitor: Configuration → Custom metrics and alerts → Add custom metric.</p>
-      ${customRows}
+      <div class="report-section-title" onclick="toggleReportSection(this)">Custom metrics required (${custom} conditions) <span class="rpt-sec-chevron">&#9660;</span></div>
+      <div class="report-section-body">
+        <p style="font-size:12px;color:var(--text2);margin-bottom:10px">Create these in Redgate Monitor: Configuration → Custom metrics and alerts → Add custom metric.</p>
+        ${customRows}
+      </div>
     </div>` : ''}
 
     ${notifSection}
@@ -3818,11 +3871,20 @@ Recommended order: (1) Activate direct replacements immediately. (2) Review beha
     </div>
 
     <div class="report-section">
-      <div class="report-section-title">Complete mapping table</div>
-      <table class="gap-table">
-        <thead><tr><th>Alert name</th><th>Instance</th><th>Severity</th><th>SS category</th><th>RG alert type</th><th>Match</th></tr></thead>
-        <tbody>${allRows}</tbody>
-      </table>
+      <div class="report-section-title" onclick="toggleReportSection(this)">Complete mapping table (${inc.length} conditions) <span class="rpt-sec-chevron">&#9660;</span></div>
+      <div class="report-section-body">
+        <table class="gap-table" id="completeMappingTable">
+          <thead><tr>
+            <th class="sortable" onclick="sortMappingTable(0,this)">Alert name <span class="sort-ic"></span></th>
+            <th class="sortable" onclick="sortMappingTable(1,this)">Instance <span class="sort-ic"></span></th>
+            <th class="sortable" onclick="sortMappingTable(2,this)">Severity <span class="sort-ic"></span></th>
+            <th class="sortable" onclick="sortMappingTable(3,this)">Source category <span class="sort-ic"></span></th>
+            <th class="sortable" onclick="sortMappingTable(4,this)">RG alert type <span class="sort-ic"></span></th>
+            <th class="sortable" onclick="sortMappingTable(5,this)">Match <span class="sort-ic"></span></th>
+          </tr></thead>
+          <tbody>${allRows}</tbody>
+        </table>
+      </div>
     </div>`;
 
   document.getElementById('summaryOverlay').style.display = 'block';
@@ -3833,6 +3895,249 @@ Recommended order: (1) Activate direct replacements immediately. (2) Review beha
 function closeSummaryReport() {
   document.getElementById('summaryOverlay').style.display = 'none';
   document.body.classList.remove('printing-report');
+}
+
+// ── Export: self-contained interactive HTML ────────────────────────────────
+function exportReportHTML() {
+  const subtitle = document.getElementById('rptSubtitle').textContent;
+  const body     = document.getElementById('rptBody').innerHTML;
+  const css      = document.querySelector('style')?.textContent || '';
+  const slug     = subtitle.replace(/[^a-z0-9]+/gi, '-').toLowerCase().slice(0, 60);
+
+  const html = `<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Migration Report — ${subtitle.replace(/</g,'&lt;')}</title>
+<style>
+${css}
+/* ── Standalone overrides ── */
+body { margin: 0; background: var(--bg); color: var(--text); }
+#rptWrap { max-width: 960px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+.rpt-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); }
+.rpt-toolbar h1 { font-size: 20px; font-weight: 700; margin: 0; }
+.rpt-toolbar p  { font-size: 12px; color: var(--text2); margin: 2px 0 0; }
+.rpt-theme-btn  { padding: 5px 12px; border: 0.5px solid var(--border2); border-radius: var(--radius); background: var(--bg2); font-size: 12px; color: var(--text2); cursor: pointer; }
+.rpt-theme-btn:hover { background: var(--bg3); }
+@media print { .rpt-toolbar button { display: none !important; } }
+</style>
+</head>
+<body>
+<div id="rptWrap">
+  <div class="rpt-toolbar">
+    <div>
+      <h1>Migration Report</h1>
+      <p>${subtitle.replace(/</g,'&lt;')}</p>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="rpt-theme-btn" onclick="toggleTheme()">Toggle dark mode</button>
+      <button class="rpt-theme-btn" onclick="window.print()">&#128438; Print / PDF</button>
+    </div>
+  </div>
+  ${body}
+</div>
+<script>
+function toggleTheme() {
+  const html = document.documentElement;
+  html.setAttribute('data-theme', html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+}
+function toggleRptCompare(el) {
+  el.classList.toggle('collapsed');
+  el.nextElementSibling.classList.toggle('hidden');
+}
+function toggleReportSection(el) {
+  el.classList.toggle('collapsed');
+  const body = el.nextElementSibling;
+  if (body) body.classList.toggle('hidden');
+}
+function toggleMatchGroup(header) {
+  header.classList.toggle('collapsed');
+  const body = header.nextElementSibling;
+  body.style.display = header.classList.contains('collapsed') ? 'none' : '';
+}
+function sortMappingTable(colIdx, th) {
+  const table = th.closest('table');
+  const tbody = table.querySelector('tbody');
+  const rows  = Array.from(tbody.querySelectorAll('tr'));
+  const isAsc = !th.classList.contains('sort-asc');
+  table.querySelectorAll('th.sortable').forEach(h => h.classList.remove('sort-asc', 'sort-desc'));
+  th.classList.add(isAsc ? 'sort-asc' : 'sort-desc');
+  rows.sort((a, b) => {
+    const aC = a.cells[colIdx], bC = b.cells[colIdx];
+    const aHas = aC.dataset.sort !== undefined && aC.dataset.sort !== '';
+    const bHas = bC.dataset.sort !== undefined && bC.dataset.sort !== '';
+    const aV = aHas ? Number(aC.dataset.sort) : aC.textContent.trim().toLowerCase();
+    const bV = bHas ? Number(bC.dataset.sort) : bC.textContent.trim().toLowerCase();
+    if (typeof aV === 'number' && typeof bV === 'number') return isAsc ? aV - bV : bV - aV;
+    return isAsc ? String(aV).localeCompare(String(bV)) : String(bV).localeCompare(String(aV));
+  });
+  rows.forEach(r => tbody.appendChild(r));
+}
+<\/script>
+</body>
+</html>`;
+
+  _triggerDownload(html, `migration-report-${slug || new Date().toISOString().slice(0,10)}.html`, 'text/html');
+}
+
+// ── Export: Markdown ───────────────────────────────────────────────────────
+function exportReportMD() {
+  const inc         = getMapped().filter(a => !a._excluded);
+  if (!inc.length) { alert('No alerts loaded.'); return; }
+
+  const srcLabel  = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'dpa' ? 'SolarWinds DPA' : sourceMode === 'quest' ? 'Quest Spotlight' : 'IDERA SQL Diagnostic Manager';
+  const fnName    = sourceMode === 'sqlsentry' ? 'Import-SSAlertsToRedgateMonitor' : sourceMode === 'dpa' ? 'Import-DPAAlertsToRedgateMonitor' : sourceMode === 'quest' ? 'Import-QuestAlertsToRedgateMonitor' : 'Import-IDERAlertsToRedgateMonitor';
+  const date      = new Date().toLocaleDateString();
+  const subtitle  = document.getElementById('rptSubtitle').textContent;
+
+  const resolved  = inc.map(a => ({ a, r: resolveRgType(a.alertType, a.alertName, a.message) }));
+  const direct    = resolved.filter(({r}) => r.match === 'direct');
+  const partial   = resolved.filter(({r}) => r.match === 'partial');
+  const custom    = resolved.filter(({r}) => r.match === 'custom');
+  const none      = resolved.filter(({r}) => r.match === 'none');
+  const retire    = resolved.filter(({r}) => r.match === 'retire');
+
+  // effort
+  const sqlTypes  = new Set(custom.filter(({r,a}) => cmDefs[((r.rgType)+'|'+a.alertName).toLowerCase()]?.sql || extractSQLFromNote(r.note)).map(({r}) => r.rgType));
+  const noSQLTypes= [...new Set(custom.map(({r}) => r.rgType))].filter(t => !sqlTypes.has(t));
+  const effDir    = direct.length  * 5;
+  const effPar    = partial.length * 25;
+  const effCust   = sqlTypes.size  * 40 + noSQLTypes.length * 90;
+  const effTotal  = effDir + effPar + effCust;
+  const effHours  = effTotal >= 60 ? `${(effTotal/60).toFixed(1)}h` : `${effTotal}m`;
+
+  // helpers
+  const mdRow  = cols => '| ' + cols.map(c => String(c).replace(/\|/g,'\\|').replace(/\n/g,' ')).join(' | ') + ' |';
+  const mdHdr  = cols => mdRow(cols) + '\n' + '| ' + cols.map(() => '---').join(' | ') + ' |';
+  const sev    = a => a.severity || '—';
+  const thresh = (a, r) => { const ad = adaptThreshold(a, r); return ad ? `${ad.original} → ${ad.adapted || '?'} *(${ad.note})*` : (a.threshold || ''); };
+
+  let md = '';
+
+  // Title
+  md += `# Migration Report: ${srcLabel} → Redgate Monitor\n\n`;
+  md += `> ${subtitle}  \n> Generated ${date} by [Alert Converter](https://spotlightcloud.io)\n\n`;
+  md += `---\n\n`;
+
+  // Stats
+  md += `## At a glance\n\n`;
+  md += mdHdr(['Category', 'Count', 'Est. effort']) + '\n';
+  md += mdRow(['✓ Direct — ready now',          direct.length,   effDir  > 0 ? `~${effDir}m`  : '—']) + '\n';
+  md += mdRow(['⚠ Partial — review first',      partial.length,  effPar  > 0 ? `~${effPar}m`  : '—']) + '\n';
+  md += mdRow(['⚙ Custom metric needed',         custom.length,   effCust > 0 ? `~${effCust}m` : '—']) + '\n';
+  md += mdRow(['✗ Not available (gaps)',          none.length,    '—']) + '\n';
+  if (retire.length) md += mdRow(['🗑 Retire — do not recreate', retire.length, '—']) + '\n';
+  md += mdRow(['**Total**', `**${inc.length}**`, `**~${effHours}**`]) + '\n\n';
+
+  // Executive summary
+  md += `## Executive summary\n\n`;
+  md += `${inc.length} ${srcLabel} conditions evaluated. `;
+  if (direct.length)  md += `${direct.length} map directly to built-in Redgate Monitor alert types and can be enabled immediately. `;
+  if (partial.length) md += `${partial.length} have partial equivalents — detection method or timing differs, review notes before enabling. `;
+  if (custom.length)  md += `${custom.length} require custom T-SQL metrics (${sqlTypes.size} have pre-written queries in this report). `;
+  if (none.length)    md += `${none.length} have no Redgate Monitor equivalent. `;
+  if (retire.length)  md += `${retire.length} are recommended for retirement — Redgate Monitor's model makes them unnecessary.\n\n`;
+
+  // Checklist
+  md += `## Migration checklist\n\n`;
+  let step = 1;
+  md += `${step++}. **Download RedgateSQM module** — Configuration → PowerShell API → Download module. Place \`RedgateSQM.psm1\` alongside the generated script.\n`;
+  if (direct.length)  md += `${step++}. **Enable ${direct.length} direct-match alert${direct.length!==1?'s':''}** — Redgate Monitor → Alert settings → enable each, set thresholds. (~${Math.round(effDir/60*10)/10}h)\n`;
+  if (partial.length) md += `${step++}. **Review ${partial.length} partial-match alert${partial.length!==1?'s':''}** — read behavior notes below before enabling. (~${Math.round(effPar/60*10)/10}h)\n`;
+  if (custom.length)  md += `${step++}. **Deploy ${[...new Set(custom.map(({r})=>r.rgType))].length} custom metric type${[...new Set(custom.map(({r})=>r.rgType))].length!==1?'s':''}** — Configuration → Custom metrics → Add. ${sqlTypes.size} have T-SQL ready below. (~${Math.round(effCust/60*10)/10}h)\n`;
+  if (notifGroups.filter(g=>g.ssGroup).length) md += `${step++}. **Configure ${notifGroups.filter(g=>g.ssGroup).length} notification profile${notifGroups.filter(g=>g.ssGroup).length!==1?'s':''}** — Configuration → Notification profiles.\n`;
+  md += `${step++}. **Run the PowerShell module** — \`${fnName} -WhatIf -Verbose\` (dry run), then \`${fnName}\` (live).\n`;
+  if (none.length)    md += `${step++}. **Document ${none.length} monitoring gap${none.length!==1?'s':''}** — accept or plan alternatives (see gaps section).\n`;
+  if (retire.length)  md += `${step++}. **Retire ${retire.length} condition${retire.length!==1?'s':''}** — do not recreate; Redgate Monitor makes these unnecessary.\n`;
+  md += `${step++}. **Validate coverage** — monitor Alert history for 1–2 weeks and compare firing patterns to your previous ${srcLabel} alert log.\n\n`;
+
+  // Direct
+  if (direct.length) {
+    md += `## ✓ Direct replacements (${direct.length})\n\n`;
+    md += `Enable these in Redgate Monitor → Alert settings immediately.\n\n`;
+    md += mdHdr(['Alert name', 'Severity', 'Redgate Monitor alert', 'Category', 'Threshold']) + '\n';
+    direct.forEach(({a,r}) => { md += mdRow([a.alertName||'—', sev(a), r.rgType, r.rgCat||'—', thresh(a,r)||'—']) + '\n'; });
+    md += '\n';
+  }
+
+  // Partial
+  if (partial.length) {
+    md += `## ⚠ Partial matches — review before enabling (${partial.length})\n\n`;
+    md += `Detection method, timing, or fidelity differs. Read the notes column before enabling each alert.\n\n`;
+    md += mdHdr(['Alert name', 'Severity', 'Redgate Monitor alert', 'Threshold', 'Behavior notes']) + '\n';
+    partial.forEach(({a,r}) => { md += mdRow([a.alertName||'—', sev(a), r.rgType, thresh(a,r)||'—', r.note]) + '\n'; });
+    md += '\n';
+  }
+
+  // Custom metrics
+  if (custom.length) {
+    md += `## ⚙ Custom metrics required (${custom.length} conditions, ${[...new Set(custom.map(({r})=>r.rgType))].length} unique types)\n\n`;
+    md += `Create in Redgate Monitor → Configuration → Custom metrics and alerts → Add custom metric.\n\n`;
+    const byType = {};
+    custom.forEach(({a,r}) => { (byType[r.rgType] = byType[r.rgType] || []).push({a,r}); });
+    Object.entries(byType).forEach(([type, items]) => {
+      md += `### ${type}\n\n`;
+      const r0   = items[0].r;
+      const autoDef = AUTO_CM_DEFAULTS[type] || {};
+      const sql  = extractSQLFromNote(r0.note);
+      if (sql) { md += `**T-SQL:**\n\`\`\`sql\n${sql}\n\`\`\`\n\n`; }
+      else      { md += `**T-SQL:** *(write your own query returning a single numeric value)*\n\n`; }
+      md += `**Suggested thresholds:** Low: ${autoDef.low||'?'} | Medium: ${autoDef.med||'?'} | High: ${autoDef.high||'?'} ${autoDef.unit ? `(unit: ${autoDef.unit})` : ''}\n\n`;
+      md += `**Conditions using this metric:**\n`;
+      items.forEach(({a}) => { md += `- ${a.alertName} *(${sev(a)})*${a.threshold ? ' — threshold: ' + a.threshold : ''}\n`; });
+      md += '\n';
+    });
+  }
+
+  // Gaps
+  if (none.length) {
+    md += `## ✗ Not available in Redgate Monitor (${none.length})\n\n`;
+    md += mdHdr(['Condition', 'Severity', 'Why', 'Alternative / note']) + '\n';
+    none.forEach(({a,r}) => { md += mdRow([a.alertName||'—', sev(a), 'No T-SQL equivalent', r.note]) + '\n'; });
+    md += '\n';
+  }
+
+  // Retire
+  if (retire.length) {
+    md += `## 🗑 Recommended for retirement (${retire.length})\n\n`;
+    md += `Do not recreate these in Redgate Monitor. Retiring them intentionally reduces alert fatigue.\n\n`;
+    md += mdHdr(['Condition', 'Severity', 'Reason to retire']) + '\n';
+    retire.forEach(({a,r}) => { md += mdRow([a.alertName||'—', sev(a), r.note]) + '\n'; });
+    md += '\n';
+  }
+
+  // Notification groups
+  const mappedGroups = notifGroups.filter(g => g.ssGroup);
+  if (mappedGroups.length) {
+    md += `## Notification group mapping\n\n`;
+    md += mdHdr([`${srcLabel} group`, 'Redgate Monitor action', 'Target']) + '\n';
+    mappedGroups.forEach(g => { md += mdRow([g.ssGroup, g.rgAction, g.rgTarget||'—']) + '\n'; });
+    md += '\n';
+  }
+
+  // Full mapping table
+  md += `## Complete mapping table\n\n`;
+  md += mdHdr(['Alert name', 'Instance', 'Severity', 'Source category', 'RG alert type', 'Match', 'Threshold']) + '\n';
+  resolved.forEach(({a,r}) => {
+    md += mdRow([a.alertName||'—', a.instance||'—', sev(a), a.alertType||'—', r.rgType, r.match, thresh(a,r)||'—']) + '\n';
+  });
+  md += '\n';
+
+  md += `---\n*Generated by [Alert Converter](https://spotlightcloud.io) on ${date}*\n`;
+
+  _triggerDownload(md, `migration-report-${new Date().toISOString().slice(0,10)}.md`, 'text/markdown');
+}
+
+function _triggerDownload(content, filename, mime) {
+  const blob = new Blob([content], { type: mime });
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
