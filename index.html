@@ -2556,6 +2556,17 @@ function buildMappingUI() {
     threshold:    find(colHeaders, ['evaluationfrequency','threshold','limit']),
     currentValue: find(colHeaders, ['maximumallowedduration','currentvalue','value','actual']),
     status:       find(colHeaders, ['status','state','duration','idleperiod'])
+  } : sourceMode === 'idera' ? {
+    alertName:    find(colHeaders, ['alert','alertname','alert_name','metric','metricname','name','title']),
+    severity:     find(colHeaders, ['severity','level','priority']),
+    instance:     find(colHeaders, ['sqlserver','servername','databaseinstance','instance','server','host']),
+    startTime:    find(colHeaders, ['date/time','datetime','timestamp','time','occurred','alerttime','start_time','starttime']),
+    endTime:      find(colHeaders, ['endtime','end_time','resolved']),
+    alertType:    find(colHeaders, ['category','alerttype','type','alert_type']),
+    message:      find(colHeaders, ['details','message','description','detail','msg','notes']),
+    threshold:    find(colHeaders, ['threshold','limit','alertthreshold']),
+    currentValue: find(colHeaders, ['currentvalue','value','current_value','actual']),
+    status:       find(colHeaders, ['status','state','duration'])
   } : {
     alertName:    find(colHeaders, ['alertname','alert_name','name','title']),
     severity:     find(colHeaders, ['severity','level','priority']),
@@ -3140,7 +3151,8 @@ function renderNotifGroups() {
   const srcPlaceholders = {
     sqlsentry: 'SQL Sentry notification group / email list name',
     idera:     'IDERA Alert Action / subscription name',
-    dpa:       'DPA notification target / email recipient name'
+    dpa:       'DPA notification target / email recipient name',
+    quest:     'Quest Spotlight alarm action / notification channel'
   };
   const srcPh = srcPlaceholders[sourceMode] || srcPlaceholders.sqlsentry;
   const rows = notifGroups.map((g, i) => `
@@ -3361,7 +3373,7 @@ function renderAlertList(mapped) {
 
   const groupConfig = [
     { key: 'direct',  label: 'Direct replacements',                  cls: 'mgh-direct',  icon: '&#10003;', desc: 'Enable these built-in Redgate Monitor alerts immediately — no setup required.' },
-    { key: 'partial', label: 'Partial match — behavior differs',      cls: 'mgh-partial', icon: '&#9432;',  desc: 'Built-in RG alert covers the intent but detection method, timing, or fidelity differs from SQL Sentry. Review notes before enabling.' },
+    { key: 'partial', label: 'Partial match — behavior differs',      cls: 'mgh-partial', icon: '&#9432;',  desc: `Built-in RG alert covers the intent but detection method, timing, or fidelity differs from ${srcLabel}. Review notes before enabling.` },
     { key: 'custom',  label: 'Custom metric required',               cls: 'mgh-custom',  icon: '&#9881;',  desc: 'No built-in equivalent — click Configure to define the T-SQL custom metric in Redgate Monitor.' },
     { key: 'none',    label: 'Not available in Redgate Monitor',      cls: 'mgh-none',    icon: '&#10007;', desc: 'No T-SQL or Redgate Monitor equivalent. See alternative recommendations below.' },
     { key: 'retire',  label: 'Not recommended — retire this alert',  cls: 'mgh-retire',  icon: '&#128465;',desc: 'Redgate Monitor\'s model makes these alerts unnecessary or noise-generating. Do not recreate.' },
@@ -3770,7 +3782,7 @@ function showSummaryReport() {
 
   const summaryText = `This migration plan evaluates ${inc.length} ${srcLabel} conditions against Redgate Monitor equivalents.
 ${direct} condition${direct!==1?'s':''} (${directPct}%) map directly to built-in Redgate Monitor alert types and can be activated immediately with no additional configuration required.
-${partial > 0 ? `${partial} condition${partial!==1?'s':''} have partial equivalents — built-in Redgate Monitor alerts cover the intent but detection method, timing, or fidelity differs from SQL Sentry. Review behavior notes before enabling.` : ''}
+${partial > 0 ? `${partial} condition${partial!==1?'s':''} have partial equivalents — built-in Redgate Monitor alerts cover the intent but detection method, timing, or fidelity differs from ${srcLabel}. Review behavior notes before enabling.` : ''}
 ${custom > 0 ? `${custom} condition${custom!==1?'s':''} (${customPct}%) require custom T-SQL metrics to be created in Redgate Monitor before migration. ${customTypes.length} distinct metric type${customTypes.length!==1?'s are':' is'} needed.` : ''}
 ${none > 0 ? `${none} condition${none!==1?'s':''} have no Redgate Monitor equivalent and cannot be migrated — alternative approaches are documented in the gap analysis below.` : ''}
 ${retire > 0 ? `${retire} condition${retire!==1?'s':''} are recommended for retirement — Redgate Monitor's monitoring model makes these unnecessary or they generate noise without actionable signal. Do not recreate these alerts.` : ''}
@@ -4107,7 +4119,7 @@ function exportReportMD() {
 
   // Title
   md += `# Migration Report: ${srcLabel} → Redgate Monitor\n\n`;
-  md += `> ${subtitle}  \n> Generated ${date} by [Alert Converter](https://spotlightcloud.io)\n\n`;
+  md += `> ${subtitle}  \n> Generated ${date} by Alert Converter\n\n`;
   md += `---\n\n`;
 
   // Stats
@@ -4214,7 +4226,7 @@ function exportReportMD() {
   });
   md += '\n';
 
-  md += `---\n*Generated by [Alert Converter](https://spotlightcloud.io) on ${date}*\n`;
+  md += `---\n*Generated by Alert Converter on ${date}*\n`;
 
   _triggerDownload(md, `migration-report-${new Date().toISOString().slice(0,10)}.md`, 'text/markdown');
 }
