@@ -1226,6 +1226,10 @@ const DPA_TYPE_MAP = [
   {keys:['buffer','cache hit','hit ratio'],
    rgType:'Custom metric',                      rgCat:'Resources',     match:'custom',  source:'Custom',
    note:'SELECT (CAST(SUM(CASE WHEN is_modified = 1 THEN 0 ELSE 1 END) AS FLOAT) / COUNT(*)) * 100 AS buffer_cache_hit_ratio FROM sys.dm_os_buffer_descriptors WHERE database_id = DB_ID()'},
+  // HA/DR — DPA type codes: FAILOVER, HA (must precede availability to avoid 'availability group' false matches)
+  {keys:['failover','ha','availability group','ag failover','cluster fail','cluster'],
+   rgType:'AG / Cluster failover',              rgCat:'Administrative',match:'direct',  source:'Custom',
+   note:'Event alert for HA topology changes. DPA type: FAILOVER.'},
   // Instance availability — DPA type codes: AVAILABILITY, UNREACHABLE
   {keys:['availability','unreachable','unavailable','not accessible','down','offline'],
    rgType:'SQL Server unavailable',             rgCat:'Administrative',match:'direct',  source:'Custom',
@@ -1238,14 +1242,14 @@ const DPA_TYPE_MAP = [
   {keys:['deadlock'],
    rgType:'Deadlock (Extended Events)',         rgCat:'Administrative',match:'direct',  source:'Custom',
    note:'Event alert with deadlock graph. DPA type: DEADLOCK.'},
-  // Backup — DPA type code: BACKUP
-  {keys:['backup'],
-   rgType:'Backup overdue',                     rgCat:'Administrative',match:'direct',  source:'Custom',
-   note:'Based on backup_finish_date vs interval. DPA type: BACKUP.'},
-  // Agent jobs — DPA type codes: JOB, AGENT_JOB
+  // Agent jobs — DPA type codes: JOB, AGENT_JOB (must precede backup to avoid 'NightlyBackup'-style false matches)
   {keys:['agent_job','job_fail','job fail','agent job','job error','job'],
    rgType:'Job failing',                        rgCat:'Administrative',match:'direct',  source:'Custom',
    note:'dbo.sysjobhistory failure detection. DPA type: JOB.'},
+  // Backup — DPA type code: BACKUP
+  {keys:['backup overdue','last backup','backup age','backup'],
+   rgType:'Backup overdue',                     rgCat:'Administrative',match:'direct',  source:'Custom',
+   note:'Based on backup_finish_date vs interval. DPA type: BACKUP.'},
   // Configuration / parameter change — DPA type code: CONFIG
   {keys:['config','parameter change','config change','configuration'],
    rgType:'SQL Server log entry',               rgCat:'Administrative',match:'partial', source:'Custom',
@@ -1254,10 +1258,6 @@ const DPA_TYPE_MAP = [
   {keys:['disk_space','disk space','disk capacity','volume','drive'],
    rgType:'Disk space',                         rgCat:'Administrative',match:'direct',  source:'Custom',
    note:'Machine-level Disk Used % threshold. DPA type: DISK.'},
-  // HA/DR — DPA type codes: FAILOVER, HA
-  {keys:['failover','ha','availability group','ag failover','cluster fail','cluster'],
-   rgType:'AG / Cluster failover',              rgCat:'Administrative',match:'direct',  source:'Custom',
-   note:'Event alert for HA topology changes. DPA type: FAILOVER.'},
   // DPA internal health — not available in Redgate Monitor
   {keys:['dpa monitor error','dpa resource collection','round-trip','roundtrip','probe'],
    rgType:'NOT AVAILABLE IN REDGATE MONITOR',  rgCat:'DPA Internal',  match:'none',    source:'Custom',
@@ -1551,7 +1551,7 @@ const SS_TYPE_MAP = [
   {keys:['disk i/o','disk io','io stall','io latency','read latency','write latency','avg disk'], rgType:'Disk space / avg read-write time', rgCat:'Resources', match:'direct', source:'PerformanceDegradation', note:'Disk I/O latency alerts'},
   {keys:['network','bandwidth','network utilization'],                    rgType:'Network utilization',               rgCat:'Resources',     match:'direct',  source:'Custom',                 note:'Disabled by default in Redgate Monitor v14'},
   {keys:['context switch','context switches','scheduler','schedulers'],  rgType:'Custom metric',                     rgCat:'Resources',     match:'custom',  source:'Custom',                 note:'Build custom metric on sys.dm_os_schedulers'},
-  {keys:['parallelism','cost threshold','maxdop','cxpacket'],            rgType:'SQL Server log entry',              rgCat:'Administrative',match:'partial', source:'Custom',                 note:'Configuration change — supplement with Extended Events'},
+  {keys:['parallelism','cost threshold','maxdop'],                       rgType:'SQL Server log entry',              rgCat:'Administrative',match:'partial', source:'Custom',                 note:'Configuration change — supplement with Extended Events'},
   // Wait / query
   {keys:['long running','long-running','query duration','slow query','elapsed time','query time'], rgType:'Long running query', rgCat:'Wait Time', match:'direct', source:'Custom', note:'Elapsed time threshold alert'},
   {keys:['wait','waits','wait time','wait stats','wait type','pageiolatch','sos_scheduler_yield'], rgType:'Waits (custom metric)', rgCat:'Wait Time', match:'custom', source:'Custom', note:'Build custom metric on sys.dm_os_wait_stats'},
@@ -1559,8 +1559,8 @@ const SS_TYPE_MAP = [
   {keys:['unavailable','unreachable','offline','down','not accessible','connectivity','cannot connect'], rgType:'SQL Server unavailable', rgCat:'Administrative', match:'direct', source:'Custom', note:'Instance connectivity / service check'},
   {keys:['blocking','blocked','block','head blocker'],                   rgType:'Blocking processes',                rgCat:'Administrative',match:'direct',  source:'Custom',                 note:'Head-blocker wait time threshold'},
   {keys:['deadlock'],                                                     rgType:'Deadlock (Extended Events)',        rgCat:'Administrative',match:'direct',  source:'Custom',                 note:'Event alert with deadlock graph'},
-  {keys:['backup','backup overdue','backup age','last backup'],          rgType:'Backup overdue',                    rgCat:'Administrative',match:'direct',  source:'Custom',                 note:'Based on backup_finish_date vs interval'},
   {keys:['agent job','sql agent','job failure','job failed','job failing','job error'], rgType:'Job failing',          rgCat:'Administrative',match:'direct',  source:'Custom',                 note:'dbo.sysjobhistory failure detection. Redgate Monitor checks job run_status on every collection cycle — same semantic as SQL Sentry.'},
+  {keys:['backup overdue','backup age','last backup','backup'],          rgType:'Backup overdue',                    rgCat:'Administrative',match:'direct',  source:'Custom',                 note:'Based on backup_finish_date vs interval'},
   {keys:['disk space','free space','low disk','drive capacity','volume capacity','disk full'], rgType:'Disk space',   rgCat:'Administrative',match:'direct',  source:'Custom',                 note:'Machine-level Disk Used % threshold. Maps directly to Redgate Monitor Disk space alert.'},
   {keys:['data file','log file','file growth','autogrow event','filegroup full'], rgType:'SQL Server log entry',     rgCat:'Administrative',match:'partial', source:'Custom',                 note:'File autogrow events are written to the SQL error log but are not discrete alert events in Redgate Monitor. Use SQL Server log entry alert with keyword filter "autogrew" as a partial substitute. For true space forecasting, pair with the Disk space alert and the Auto-Growth custom metric.'},
   // True failover / role-change events only — do NOT use for health or sync degradation
@@ -2640,7 +2640,7 @@ function buildPreview() {
   const high = mapped.filter(a => a.severity.toLowerCase() === 'high').length;
   const med  = mapped.filter(a => a.severity.toLowerCase() === 'medium').length;
   const low  = mapped.filter(a => ['low','info'].includes(a.severity.toLowerCase())).length;
-  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'dpa' ? 'SolarWinds DPA' : 'IDERA';
+  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'dpa' ? 'SolarWinds DPA' : sourceMode === 'quest' ? 'Quest Spotlight' : 'IDERA';
 
   // Compute match-type breakdown once per alert
   const resolved = mapped.map(a => resolveRgType(a.alertType, a.alertName, a.message));
@@ -2693,10 +2693,10 @@ function buildOutputs() {
 }
 
 function buildModule(list, url, tok, inst) {
-  const srcLabel   = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'dpa' ? 'SolarWinds DPA' : 'IDERA SQL Diagnostic Manager';
-  const fnName     = sourceMode === 'sqlsentry' ? 'Import-SSAlertsToRedgateMonitor'  : sourceMode === 'dpa' ? 'Import-DPAAlertsToRedgateMonitor' : 'Import-IDERAlertsToRedgateMonitor';
-  const rollbackFn = sourceMode === 'sqlsentry' ? 'Invoke-SSAlertRollback'           : sourceMode === 'dpa' ? 'Invoke-DPAAlertRollback'          : 'Invoke-IDERAAlertRollback';
-  const notifLabel = sourceMode === 'sqlsentry' ? 'Notification groups'              : sourceMode === 'dpa' ? 'Notification profiles'            : 'Alert Actions / Subscriptions';
+  const srcLabel   = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'dpa' ? 'SolarWinds DPA' : sourceMode === 'quest' ? 'Quest Spotlight' : 'IDERA SQL Diagnostic Manager';
+  const fnName     = sourceMode === 'sqlsentry' ? 'Import-SSAlertsToRedgateMonitor'  : sourceMode === 'dpa' ? 'Import-DPAAlertsToRedgateMonitor' : sourceMode === 'quest' ? 'Import-QuestAlertsToRedgateMonitor' : 'Import-IDERAlertsToRedgateMonitor';
+  const rollbackFn = sourceMode === 'sqlsentry' ? 'Invoke-SSAlertRollback'           : sourceMode === 'dpa' ? 'Invoke-DPAAlertRollback'          : sourceMode === 'quest' ? 'Invoke-QuestAlertRollback'          : 'Invoke-IDERAAlertRollback';
+  const notifLabel = sourceMode === 'sqlsentry' ? 'Notification groups'              : sourceMode === 'dpa' ? 'Notification profiles'            : sourceMode === 'quest' ? 'Notification channel mapping'       : 'Alert Actions / Subscriptions';
   const byInst = {};
   list.forEach(a => { const k = a.instance||inst; (byInst[k]=byInst[k]||[]).push(a); });
   const customNeeded = [];
@@ -2926,7 +2926,7 @@ Export-ModuleMember -Function ${fnName}, ${rollbackFn}
 }
 
 function buildJSON(list) {
-  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'dpa' ? 'SolarWinds DPA' : 'IDERA';
+  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'dpa' ? 'SolarWinds DPA' : sourceMode === 'quest' ? 'Quest Spotlight' : 'IDERA';
   return JSON.stringify(list.map(a => {
     const r = resolveRgType(a.alertType, a.alertName, a.message);
     return {
@@ -2941,8 +2941,8 @@ function buildJSON(list) {
 }
 
 function buildSQL(list) {
-  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'dpa' ? 'SolarWinds DPA' : 'IDERA';
-  const tblName  = sourceMode === 'sqlsentry' ? 'SSAlertImport' : sourceMode === 'dpa' ? 'DPAAlertImport' : 'IDERAAlertImport';
+  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'dpa' ? 'SolarWinds DPA' : sourceMode === 'quest' ? 'Quest Spotlight' : 'IDERA';
+  const tblName  = sourceMode === 'sqlsentry' ? 'SSAlertImport' : sourceMode === 'dpa' ? 'DPAAlertImport' : sourceMode === 'quest' ? 'QuestAlertImport' : 'IDERAAlertImport';
   let s = `-- ${srcLabel} Alert Annotations — staging table with RG type mapping
 -- Generated: ${new Date().toISOString()}
 
@@ -3041,7 +3041,7 @@ function showOutput(mode) {
     const id = 'oTab' + m.charAt(0).toUpperCase() + m.slice(1);
     document.getElementById(id).classList.toggle('active', m === mode);
   });
-  const src = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'dpa' ? 'SolarWinds DPA' : 'IDERA';
+  const src = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'dpa' ? 'SolarWinds DPA' : sourceMode === 'quest' ? 'Quest Spotlight' : 'IDERA';
   const notes = {
     ps:   `Signed PowerShell module (.psm1) with WhatIf, transcript logging, and rollback log. Import-Module then call the exported function. Use -WhatIf for a dry run. Alerts marked [CUSTOM METRIC REQUIRED] need a custom metric built in Redgate Monitor first (Configuration → Custom metrics and alerts).`,
     json: `POST this JSON to a webhook or routing layer. Each record carries both the ${src} category and the resolved Redgate Monitor alert type for downstream logic.`,
@@ -3058,7 +3058,7 @@ function copyOutput() {
 }
 function downloadOutput() {
   const ext  = outputMode==='ps'?'.psm1':outputMode==='json'?'.json':'.sql';
-  const slug = sourceMode === 'sqlsentry' ? 'Import-SSAlerts' : sourceMode === 'dpa' ? 'Import-DPAAlerts' : 'Import-IDERAAlerts';
+  const slug = sourceMode === 'sqlsentry' ? 'Import-SSAlerts' : sourceMode === 'dpa' ? 'Import-DPAAlerts' : sourceMode === 'quest' ? 'Import-QuestAlerts' : 'Import-IDERAAlerts';
   const a = document.createElement('a');
   a.href = 'data:text/plain;charset=utf-8,' + encodeURIComponent(document.getElementById('outputBlock').textContent);
   a.download = slug + ext; a.click();
@@ -3350,7 +3350,7 @@ function getConfidenceTier(r, a) {
 // ── Visual grouped alert list ──────────────────────────────────────────────
 function renderAlertList(mapped) {
   const sorted = sortMapped(mapped);
-  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'dpa' ? 'SolarWinds DPA' : 'IDERA';
+  const srcLabel = sourceMode === 'sqlsentry' ? 'SQL Sentry' : sourceMode === 'dpa' ? 'SolarWinds DPA' : sourceMode === 'quest' ? 'Quest Spotlight' : 'IDERA';
   const groups = { direct: [], partial: [], custom: [], none: [] };
   _cardSqlMap.clear(); // reset cache before each render
   sorted.forEach(a => {
