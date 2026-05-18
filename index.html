@@ -2281,7 +2281,7 @@ function normalizeCSVText(text, fmt, idOffset) {
     currentValue: find(headers, ['value','current value','currentvalue','actual value','alarm value']),
     status:       find(headers, ['status','state','alarm status'])
   } : fmt === 'idera' ? {
-    alertName:    find(headers, ['alert','metric','alerttype','alert type','alert_type','metricname','metric name']),
+    alertName:    find(headers, ['alert','alertname','alert_name','metric','alerttype','alert type','alert_type','metricname','metric name']),
     severity:     find(headers, ['severity','level','priority']),
     instance:     find(headers, ['sqlserver','sql server','server','servername','server name','instance','host']),
     startTime:    find(headers, ['date/time','datetime','date time','timestamp','time','occurred','alerttime','alert time']),
@@ -3719,8 +3719,6 @@ function showSummaryReport() {
   // Direct: 5 min (enable + set threshold). Partial: 25 min (review + adjust).
   // Custom with T-SQL: 40 min per unique type. Custom no T-SQL: 90 min per type.
   // None: 0 (accept the gap).
-  const uniqueCustomWithSQL    = [...new Set(incResolved.filter(({r}) => r.match==='custom' && (cmDefs[((r.rgType)+'|'+'x').split('|')[0]] || extractSQLFromNote(r.note))).map(({r})=>r.rgType))];
-  const uniqueCustomNoSQL      = [...new Set(incResolved.filter(({r}) => r.match==='custom' && !extractSQLFromNote(r.note)).map(({r})=>r.rgType))].filter(t => !uniqueCustomWithSQL.includes(t));
   const allUniqueCustom        = [...new Set(incResolved.filter(({r})=>r.match==='custom').map(({r})=>r.rgType))];
   const sqlCoveredTypes        = new Set(incResolved.filter(({r,a}) => r.match==='custom' && (cmDefs[((r.rgType)+'|'+a.alertName).toLowerCase()]?.sql || extractSQLFromNote(r.note))).map(({r})=>r.rgType));
   const noSQLTypes             = allUniqueCustom.filter(t => !sqlCoveredTypes.has(t));
