@@ -1943,6 +1943,7 @@ const RG_FIELDS = {
 // ── Source switching ───────────────────────────────────────────────────────
 function setSource(mode) {
   sourceMode = mode;
+  alerts = []; colHeaders = []; mappings = {};
   document.getElementById('srcSS').classList.toggle('active',    mode === 'sqlsentry');
   document.getElementById('srcIDERA').classList.toggle('active', mode === 'idera');
   document.getElementById('srcDPA').classList.toggle('active',   mode === 'dpa');
@@ -2063,8 +2064,7 @@ async function handleDPAJsonFiles(files) {
     }
   }
   if (!allAlerts.length) {
-    // None of the JSON files were DPA format — fall back
-    alert('No DPA alert definitions found in the selected JSON files. Make sure you export from DPA → Alerts → Export.');
+    alert('No alert definitions found in the selected JSON files. If using DPA, make sure you export from DPA → Alerts → Export.');
     return;
   }
   finalizeConditionImport(allAlerts, summary);
@@ -3302,9 +3302,9 @@ function adaptThreshold(a, r) {
   const hasNum  = !isNaN(num);
   const lower   = thresh.toLowerCase();
 
-  // Backup: days → hours
+  // Backup: days → hours (only when unit is explicit to avoid misidentifying an already-in-hours value)
   if (r.rgType === 'Backup overdue' && hasNum) {
-    if (lower.includes('day') || (!lower.includes('hour') && num > 0 && num <= 30)) {
+    if (lower.includes('day')) {
       const hrs = Math.round(num * 24);
       return { original: thresh, adapted: `${hrs} hours`, note: `×24 — Redgate Monitor uses hours, not days` };
     }
