@@ -832,7 +832,7 @@
     </svg>
     Alert → Redgate Monitor
   </a>
-  <span class="nav-badge">v1.2</span>
+  <span class="nav-badge">v1.3</span>
   <div class="nav-spacer"></div>
   <button class="theme-btn" id="themeBtn" onclick="toggleTheme()">
     <svg id="themeIcon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></svg>
@@ -1421,8 +1421,8 @@ const IDERA_TYPE_MAP = [
    rgType:'Custom metric', rgCat:'Custom', match:'custom', source:'Custom',
    note:'SELECT session_id, SUM(user_objects_alloc_page_count+internal_objects_alloc_page_count)*8/1024.0 AS tempdb_mb FROM sys.dm_db_session_space_usage GROUP BY session_id HAVING SUM(user_objects_alloc_page_count+internal_objects_alloc_page_count)*8/1024.0 > threshold'},
   {keys:['version store size','version store generation','longest running version store'],
-   rgType:'Custom metric', rgCat:'Custom', match:'custom', source:'Custom',
-   note:'SELECT SUM(version_store_reserved_page_count)*8/1024 AS version_store_mb FROM sys.dm_db_file_space_usage — also query sys.dm_tran_version_store_space_usage; alert when growing unexpectedly'},
+   rgType:'Version store usage', rgCat:'Administrative', match:'direct', source:'Custom',
+   note:'Native Redgate Monitor alert (Version store usage — built in since Redgate Monitor 12.0); no custom metric required. Set the threshold in MB. For the "longest running version store transaction" aspect, supplement with a custom metric on sys.dm_tran_active_snapshot_database_transactions. Reference DMVs: sys.dm_db_file_space_usage (version_store_reserved_page_count), sys.dm_tran_version_store_space_usage.'},
   {keys:['index row hits'],
    rgType:'Custom metric', rgCat:'Custom', match:'custom', source:'Custom',
    note:'SELECT user_seeks+user_scans+user_lookups AS hits, user_updates, OBJECT_NAME(object_id) FROM sys.dm_db_index_usage_stats WHERE database_id=DB_ID() — alert when seek/scan ratio drops below threshold'},
@@ -1512,7 +1512,7 @@ const SS_TYPE_MAP = [
   // Disk I/O & Storage conditions — must come before generic 'disk space' / 'disk' entries
   {keys:['high disk waits and latency','disk waits and latency','high disk wait latency'], rgType:'Disk space / avg read-write time', rgCat:'Resources', match:'direct', source:'PerformanceDegradation', note:'Maps to avg read-write time alert. Latency benchmarks: <10ms=fast, 10-20ms=acceptable, 20-50ms=slow, >50ms=critical. Transaction logs: 0-2ms optimal.'},
   {keys:['high pending disk io count','pending disk io count','pending io count high'], rgType:'Custom metric', rgCat:'Resources', match:'custom', source:'Custom', note:'SELECT SUM(pending_disk_io_count) FROM sys.dm_os_schedulers WHERE scheduler_id < 255 — alert when sum > 0 sustained; indicates I/O subsystem saturation'},
-  {keys:['high vlf count','vlf count','virtual log file count','excessive vlf'], rgType:'Custom metric', rgCat:'Advisory', match:'custom', source:'Custom', note:"SELECT COUNT(*) AS vlf_count FROM sys.dm_db_log_info(DB_ID()) — alert when > 1000 VLFs per database. Fix: shrink log then resize with one large growth increment to avoid VLF proliferation"},
+  {keys:['high vlf count','vlf count','virtual log file count','excessive vlf'], rgType:'Virtual log file count', rgCat:'Administrative', match:'direct', source:'Custom', note:"Native Redgate Monitor alert (Virtual log file count — built in since Redgate Monitor 14.0); no custom metric required. Set the threshold (e.g. > 1000 VLFs per database). Fix: shrink log then resize with one large growth increment to avoid VLF proliferation. Reference DMV: sys.dm_db_log_info(DB_ID())."},
   {keys:['data file shrink','file shrink detected','shrink event detected'], rgType:'Custom metric', rgCat:'Advisory', match:'custom', source:'Custom', note:'Compare sys.master_files size over intervals: SELECT name, size FROM sys.master_files — alert when size decreases vs prior snapshot. Data file shrinks are almost always harmful to performance.'},
   {keys:['database files count change','files count change','file count changed'], rgType:'Custom metric', rgCat:'Advisory', match:'custom', source:'Custom', note:'SELECT DB_NAME(database_id), type_desc, COUNT(*) AS file_count FROM sys.master_files GROUP BY database_id, type_desc — alert when count differs from baseline; triggers backup job review'},
   {keys:['auto-growth disabled','autogrowth disabled','file auto-growth disabled'], rgType:'Custom metric', rgCat:'Advisory', match:'custom', source:'Custom', note:'SELECT name, DB_NAME(database_id) FROM sys.master_files WHERE is_percent_growth = 0 AND growth = 0 — alert when count > 0; disabled auto-growth risks full DML halt when space exhausted'},
@@ -1645,11 +1645,11 @@ const QUEST_TYPE_MAP = [
    rgType:'Backup overdue', rgCat:'Administrative', match:'direct', source:'Custom',
    note:'Maps directly to Backup overdue alert in Redgate Monitor. Convert threshold: Spotlight days × 24 = Redgate Monitor hours threshold. Set backup type filter to FULL in the alert configuration.'},
   {keys:['backup - hours since last differential backup'],
-   rgType:'Backup overdue', rgCat:'Administrative', match:'partial', source:'Custom',
-   note:'Partial match — Backup overdue in Redgate Monitor covers full/differential/log. Set threshold in hours to match Spotlight threshold. Redgate Monitor does not currently distinguish differential from log backups in the alert type — verify coverage with msdb.dbo.backupset.'},
+   rgType:'Differential backup overdue', rgCat:'Administrative', match:'direct', source:'Custom',
+   note:'Maps directly to the dedicated Differential backup overdue alert in Redgate Monitor (the standard "Backup overdue" alert does NOT check differential backups). Set the threshold in hours to match the Spotlight threshold.'},
   {keys:['backup - minutes since last log backup'],
-   rgType:'Backup overdue', rgCat:'Administrative', match:'partial', source:'Custom',
-   note:'Partial match — Backup overdue in Redgate Monitor covers log backups. Convert threshold: Spotlight minutes ÷ 60 = Redgate Monitor hours. Recommended threshold for log backups: 1–4 hours (0.02–0.07 days) depending on RPO.'},
+   rgType:'Log backup overdue', rgCat:'Administrative', match:'direct', source:'Custom',
+   note:'Maps directly to the dedicated Log backup overdue alert in Redgate Monitor (the standard "Backup overdue" alert does NOT check log backups). Convert threshold: Spotlight minutes ÷ 60 = Redgate Monitor hours. Recommended threshold for log backups: 1–4 hours depending on RPO.'},
 
   // ── Cluster ────────────────────────────────────────────────────────────────
   {keys:['clusters - failed over','cluster failed over'],
@@ -1821,8 +1821,8 @@ const QUEST_TYPE_MAP = [
    rgType:'Custom metric', rgCat:'Custom', match:'custom', source:'Custom',
    note:'Spotlight custom counter alerts map to Redgate Monitor custom metric alerts. Recreate each counter\'s T-SQL query in Redgate Monitor under Configuration → Custom metrics and alerts. The custom metric must return a single scalar numeric value.'},
   {keys:['sql virtual log files count','virtual log files count','vlf count'],
-   rgType:'Custom metric', rgCat:'Advisory', match:'custom', source:'Custom',
-   note:"SELECT DB_NAME(database_id) AS db_name, COUNT(*) AS vlf_count FROM sys.dm_db_log_info(NULL) GROUP BY database_id HAVING COUNT(*) > 1000 — alert when > 1000 VLFs per database. Excessive VLFs slow database startup and log backup. Fix: shrink log file, then regrow with one large fixed increment."},
+   rgType:'Virtual log file count', rgCat:'Administrative', match:'direct', source:'Custom',
+   note:"Native Redgate Monitor alert (Virtual log file count — built in since Redgate Monitor 14.0); no custom metric required. Set the threshold (e.g. > 1000 VLFs per database). Excessive VLFs slow database startup and log backup. Fix: shrink log file, then regrow with one large fixed increment. Reference DMV: sys.dm_db_log_info(NULL)."},
 
   // ── Tempdb ─────────────────────────────────────────────────────────────────
   {keys:['tempdb auto growth','tempdb autogrowth'],
@@ -1838,8 +1838,8 @@ const QUEST_TYPE_MAP = [
    rgType:'Custom metric', rgCat:'Custom', match:'custom', source:'Custom',
    note:"SELECT cntr_value AS version_generation_rate FROM sys.dm_os_performance_counters WHERE counter_name = 'Version Generation rate (KB/s)' AND object_name LIKE '%Transactions%' — alert when > 1024 KB/s sustained; indicates heavy SNAPSHOT or RCSI usage growing the version store rapidly"},
   {keys:['tempdb version store size','version store size'],
-   rgType:'Custom metric', rgCat:'Custom', match:'custom', source:'Custom',
-   note:'SELECT SUM(version_store_reserved_page_count)*8/1024 AS version_store_mb FROM sys.dm_db_file_space_usage — alert when > threshold MB. Version store growth causes tempdb to expand and is typically caused by long-running SNAPSHOT transactions or uncommitted transactions.'},
+   rgType:'Version store usage', rgCat:'Administrative', match:'direct', source:'Custom',
+   note:'Native Redgate Monitor alert (Version store usage — built in since Redgate Monitor 12.0); no custom metric required. Set the threshold in MB. Version store growth expands tempdb and is typically caused by long-running SNAPSHOT transactions or uncommitted transactions. Reference DMV: sys.dm_db_file_space_usage (version_store_reserved_page_count).'},
 
   // ── User ───────────────────────────────────────────────────────────────────
   {keys:['user - connection count','connection count'],
