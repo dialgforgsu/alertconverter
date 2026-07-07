@@ -887,7 +887,7 @@
         <span id="dropLabel">Drop a DPA CSV or ZIP here, or click to browse</span>
         <br><span style="font-size:11px;opacity:.7">Supports .csv, .txt, .zip, and .condition files (multiple allowed)</span>
         <span class="drop-zone-mobile-label">Tap to browse files</span>
-        <input type="file" id="fileIn" accept=".csv,.txt,.zip,.condition" style="display:none" multiple onchange="handleFile(event)">
+        <input type="file" id="fileIn" accept=".csv,.txt,.zip,.condition,.xlsx,.xls" style="display:none" multiple onchange="handleFile(event)">
       </div>
       <div id="fileErrorArea"></div>
       <label>Or paste CSV data directly (header row required):</label>
@@ -1962,7 +1962,7 @@ function setSource(mode) {
   };
   const cardTitles = { sqlsentry: 'Import SQL Sentry alert export', idera: 'Import IDERA alert export', dpa: 'Import DPA alert export', quest: 'Import Quest Spotlight alarm export' };
   const dropLabels = {
-    sqlsentry: 'Drop SQL Sentry .condition files, a ZIP, or a CSV here, or click to browse',
+    sqlsentry: 'Drop SQL Sentry .condition files, a ZIP, or an Alerts-log export (CSV or Excel .xlsx) here, or click to browse',
     idera:     'Drop an IDERA CSV or ZIP here, or click to browse',
     dpa:       'Drop a DPA CSV or ZIP here, or click to browse',
     quest:     'Drop a Quest Spotlight alarm history CSV or ZIP here, or click to browse'
@@ -2044,7 +2044,131 @@ function handleFileList(fileList) {
   // DPA native JSON export: one or more .json files (Alerts_*.json, etc.)
   const jsonFiles = files.filter(f => f.name.toLowerCase().endsWith('.json'));
   if (jsonFiles.length) { handleDPAJsonFiles(jsonFiles); return; }
-  readCSVFile(files[0]);
+  routeCsvOrXlsx(files[0]);
+}
+
+// Sniff the leading bytes so an .xlsx workbook (even one saved with a .csv name,
+// as SQL Sentry's Alerts-log "Export Data" often produces) is parsed as Excel,
+// while genuine text CSV/TSV still flows through readCSVFile().
+async function routeCsvOrXlsx(f) {
+  try {
+    const sig = new Uint8Array(await f.slice(0, 4).arrayBuffer());
+    // PK\x03\x04 (and the empty/spanned variants) = ZIP container = .xlsx
+    if (sig[0] === 0x50 && sig[1] === 0x4B && (sig[2] === 0x03 || sig[2] === 0x05 || sig[2] === 0x07)) {
+      handleXlsx(f); return;
+    }
+  } catch (e) { /* fall through to plain-text handling */ }
+  readCSVFile(f);
+}
+
+// Convert the first worksheet of an .xlsx workbook to CSV text, then feed it
+// through the normal CSV pipeline. Uses only JSZip (already loaded) — no extra
+// spreadsheet library required, so it works offline / on GitHub Pages.
+async function handleXlsx(f) {
+  let zip;
+  try { zip = await JSZip.loadAsync(f); }
+  catch (e) { alert('Could not read Excel file: ' + e.message); return; }
+  let csv;
+  try { csv = await xlsxToCSV(zip); }
+  catch (e) { alert('Could not extract data from the Excel file: ' + e.message); return; }
+  if (!csv) { alert('No worksheet data found in the Excel file.'); return; }
+  // A SQL Sentry Alerts-log export has "Condition" + "Condition Type" columns —
+  // make sure the SQL Sentry source is selected so the right mapping is applied.
+  const header = (csv.split('\n')[0] || '').toLowerCase();
+  if (header.includes('condition') && header.includes('condition type') && sourceMode !== 'sqlsentry') {
+    setSource('sqlsentry');
+  }
+  document.getElementById('rawPaste').value = csv;
+  parseCSV();
+}
+
+// Minimal OOXML reader: shared strings + first worksheet → CSV text.
+async function xlsxToCSV(zip) {
+  const dec = s => s.replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>')
+                    .replace(/&quot;/g,'"').replace(/&#39;|&apos;/g,"'");
+  const read = async p => { const e = zip.file(p); return e ? await e.async('string') : ''; };
+
+  // Shared strings table
+  const shared = [];
+  const ssXml = await read('xl/sharedStrings.xml');
+  if (ssXml) {
+    const siRe = /<si>([\s\S]*?)<\/si>/g; let m;
+    while ((m = siRe.exec(ssXml))) {
+      const ts = [...m[1].matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map(x => dec(x[1]));
+      shared.push(ts.join(''));
+    }
+  }
+
+  // Style indices that render as dates (built-in numFmt ids + custom date codes),
+  // so serial numbers in Start/End-time columns come out human-readable.
+  const dateStyles = new Set();
+  const stylesXml = await read('xl/styles.xml');
+  if (stylesXml) {
+    const customDate = new Set();
+    const nfRe = /<numFmt[^>]*numFmtId="(\d+)"[^>]*formatCode="([^"]*)"/g; let nf;
+    while ((nf = nfRe.exec(stylesXml))) {
+      if (/[dmyhs]/i.test(nf[2]) && !/[#0]/.test(nf[2])) customDate.add(nf[1]);
+    }
+    const block = /<cellXfs[^>]*>([\s\S]*?)<\/cellXfs>/.exec(stylesXml);
+    if (block) {
+      [...block[1].matchAll(/<xf[^>]*?numFmtId="(\d+)"[^>]*?\/?>/g)].forEach((xf, i) => {
+        const id = +xf[1];
+        if ((id >= 14 && id <= 22) || (id >= 45 && id <= 47) || customDate.has(xf[1])) dateStyles.add(i);
+      });
+    }
+  }
+  const serialToStr = n => {
+    const d = new Date(Math.round((n - 25569) * 86400 * 1000));
+    if (isNaN(d)) return String(n);
+    const p = x => String(x).padStart(2, '0');
+    const date = `${d.getUTCFullYear()}-${p(d.getUTCMonth()+1)}-${p(d.getUTCDate())}`;
+    return Math.abs(n - Math.trunc(n)) > 1e-9
+      ? `${date} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}` : date;
+  };
+
+  // First worksheet (lowest sheetN.xml)
+  const sheets = Object.keys(zip.files)
+    .filter(n => /^xl\/worksheets\/sheet\d+\.xml$/i.test(n))
+    .sort((a, b) => parseInt(a.match(/(\d+)/)[1],10) - parseInt(b.match(/(\d+)/)[1],10));
+  if (!sheets.length) return '';
+  const sheetXml = await read(sheets[0]);
+
+  const colIdx = ref => { let n = 0; for (const c of ref.replace(/\d+/g,'')) n = n*26 + (c.charCodeAt(0)-64); return n-1; };
+  const out = [];
+  const rowRe = /<row[^>]*>([\s\S]*?)<\/row>/g; let rm;
+  while ((rm = rowRe.exec(sheetXml))) {
+    const cells = []; let maxIdx = -1;
+    const cRe = /<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g; let cm;
+    while ((cm = cRe.exec(rm[1]))) {
+      const attrs = cm[1] || '';
+      const rM = /r="([A-Z]+\d+)"/.exec(attrs); if (!rM) continue;
+      const idx = colIdx(rM[1]);
+      const t = (/t="([^"]+)"/.exec(attrs) || [])[1] || null;
+      const s = (/s="(\d+)"/.exec(attrs) || [])[1];
+      let val = '';
+      if (t === 'inlineStr') {
+        const iv = /<t[^>]*>([\s\S]*?)<\/t>/.exec(cm[2] || ''); val = iv ? dec(iv[1]) : '';
+      } else {
+        const vM = /<v>([\s\S]*?)<\/v>/.exec(cm[2] || '');
+        if (vM) {
+          if (t === 's') val = shared[parseInt(vM[1],10)] || '';
+          else if (s !== undefined && dateStyles.has(+s) && vM[1] !== '' && !isNaN(+vM[1])) val = serialToStr(+vM[1]);
+          else val = dec(vM[1]);
+        }
+      }
+      cells[idx] = val;
+      if (idx > maxIdx) maxIdx = idx;
+    }
+    const line = [];
+    for (let i = 0; i <= maxIdx; i++) line.push(csvField(cells[i] == null ? '' : cells[i]));
+    out.push(line.join(','));
+  }
+  return out.join('\n');
+}
+
+function csvField(s) {
+  s = String(s == null ? '' : s);
+  return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 }
 
 async function handleDPAJsonFiles(files) {
@@ -2292,12 +2416,13 @@ function normalizeCSVText(text, fmt, idOffset) {
     currentValue: find(headers, ['current value','currentvalue','value','current_value','actual']),
     status:       find(headers, ['status','state','duration'])
   } : fmt === 'ss-csv' ? {
-    alertName:    find(headers, ['name','alertname','alert_name','title']),
+    // Prefer "Condition"/"Condition Type" (Alerts-log layout) over Name/Type.
+    alertName:    find(headers, ['condition']) || find(headers, ['name','alertname','alert_name','title']),
     severity:     find(headers, ['severity','level','priority']),
-    instance:     find(headers, ['target','databaseinstance','instance','server','host']),
+    instance:     find(headers, ['target','databaseinstance','instance','server','host']) || (find(headers, ['condition']) ? find(headers, ['name']) : ''),
     startTime:    find(headers, ['starttime','start_time','timestamp','datetime','time','occurred']),
     endTime:      find(headers, ['endtime','end_time','resolved']),
-    alertType:    find(headers, ['conditiontype','type','category','alerttype','alert_type']),
+    alertType:    find(headers, ['conditiontype']) || find(headers, ['category','type','alerttype','alert_type']),
     message:      find(headers, ['notes','message','description','detail','msg']),
     threshold:    find(headers, ['evaluationfrequency','threshold','limit']),
     currentValue: find(headers, ['maximumallowedduration','currentvalue','value','actual']),
@@ -2546,12 +2671,16 @@ function buildMappingUI() {
     currentValue: find(colHeaders, ['value','currentvalue','actual']),
     status:       find(colHeaders, ['status','state'])
   } : sourceMode === 'sqlsentry' ? {
-    alertName:    find(colHeaders, ['name','alertname','alert_name','title']),
+    // Alerts-log exports carry the alert in "Condition"; the "Name" column is the
+    // monitored object/server. find() returns the first matching header, so use
+    // explicit precedence to prefer Condition over Name for the alert itself.
+    alertName:    find(colHeaders, ['condition']) || find(colHeaders, ['name','alertname','alert_name','title']),
     severity:     find(colHeaders, ['severity','level','priority']),
-    instance:     find(colHeaders, ['target','databaseinstance','instance','server','host']),
+    instance:     find(colHeaders, ['target','databaseinstance','instance','server','host']) || (find(colHeaders, ['condition']) ? find(colHeaders, ['name']) : ''),
     startTime:    find(colHeaders, ['starttime','start_time','timestamp','datetime','time','occurred']),
     endTime:      find(colHeaders, ['endtime','end_time','resolved']),
-    alertType:    find(colHeaders, ['conditiontype','type','category','alerttype','alert_type']),
+    // Prefer "Condition Type" (General/Advisory/Failsafe/Audit) over the object "Type".
+    alertType:    find(colHeaders, ['conditiontype']) || find(colHeaders, ['category','type','alerttype','alert_type']),
     message:      find(colHeaders, ['notes','message','description','detail','msg']),
     threshold:    find(colHeaders, ['evaluationfrequency','threshold','limit']),
     currentValue: find(colHeaders, ['maximumallowedduration','currentvalue','value','actual']),
